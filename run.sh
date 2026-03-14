@@ -86,7 +86,7 @@ find_compatible_java() {
         done
     fi
 
-    # 3. Eclipse Temurin / Adoptium (most common cross-platform install).
+    # 3. Eclipse Temurin / Adoptium + OpenJDK (cross-platform install).
     for candidate in \
         "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home" \
         "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home" \
@@ -94,9 +94,15 @@ find_compatible_java() {
         "/usr/lib/jvm/temurin-21-amd64"  \
         "/usr/lib/jvm/temurin-17-amd64"  \
         "/usr/lib/jvm/temurin-11-amd64"  \
+        "/usr/lib/jvm/java-21-temurin-jdk" \
+        "/usr/lib/jvm/java-17-temurin-jdk" \
+        "/usr/lib/jvm/java-11-temurin-jdk" \
         "/usr/lib/jvm/java-21-openjdk-amd64" \
         "/usr/lib/jvm/java-17-openjdk-amd64" \
         "/usr/lib/jvm/java-11-openjdk-amd64" \
+        "/usr/lib/jvm/java-21-openjdk" \
+        "/usr/lib/jvm/java-17-openjdk" \
+        "/usr/lib/jvm/java-11-openjdk" \
     ; do
         check_java_candidate "$candidate" && return 0
     done

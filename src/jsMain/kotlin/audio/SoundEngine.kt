@@ -564,4 +564,212 @@ class SoundEngine {
         pop.start(now)
         pop.stop(now + 0.06)
     }
+
+    /** Pinch — tight, high-frequency squish like pinching putty */
+    fun playPinch(intensity: Double) {
+        ensureResumed()
+        val now = ctx.currentTime as Double
+        val freq = 300.0 + intensity * 400.0
+
+        val osc = ctx.createOscillator()
+        osc.type = "sine"
+        osc.frequency.setValueAtTime(freq, now)
+        osc.frequency.exponentialRampToValueAtTime(100, now + 0.15)
+        val gain = ctx.createGain()
+        gain.gain.setValueAtTime(0.08 * intensity, now)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2)
+        val filter = ctx.createBiquadFilter()
+        filter.type = "lowpass"
+        filter.frequency.setValueAtTime(800, now)
+        osc.connect(filter)
+        filter.connect(gain)
+        gain.connect(ctx.destination)
+        osc.start(now)
+        osc.stop(now + 0.25)
+    }
+
+    /** Slap — sharp, bright impact with a ringing tail */
+    fun playSlap() {
+        ensureResumed()
+        val now = ctx.currentTime as Double
+        val sr = ctx.sampleRate as Double
+
+        // Layer 1: sharp transient crack
+        val crackSize = (sr * 0.02).toInt()
+        val crackBuf = ctx.createBuffer(1, crackSize, ctx.sampleRate)
+        val crackData = crackBuf.getChannelData(0)
+        for (i in 0 until crackSize) {
+            crackData[i] = (kotlin.random.Random.nextDouble() * 2.0 - 1.0) * 0.4
+        }
+        val crack = ctx.createBufferSource()
+        crack.buffer = crackBuf
+        val crackFilter = ctx.createBiquadFilter()
+        crackFilter.type = "bandpass"
+        crackFilter.frequency.setValueAtTime(2500, now)
+        crackFilter.Q.setValueAtTime(2.0, now)
+        val crackGain = ctx.createGain()
+        crackGain.gain.setValueAtTime(0.2, now)
+        crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06)
+        crack.connect(crackFilter)
+        crackFilter.connect(crackGain)
+        crackGain.connect(ctx.destination)
+        crack.start(now)
+        crack.stop(now + 0.08)
+
+        // Layer 2: ringing tone
+        val ring = ctx.createOscillator()
+        ring.type = "sine"
+        ring.frequency.setValueAtTime(400, now)
+        ring.frequency.exponentialRampToValueAtTime(200, now + 0.2)
+        val ringGain = ctx.createGain()
+        ringGain.gain.setValueAtTime(0.06, now)
+        ringGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25)
+        ring.connect(ringGain)
+        ringGain.connect(ctx.destination)
+        ring.start(now)
+        ring.stop(now + 0.3)
+    }
+
+    /** Knead — continuous low rumble with pulsing character */
+    fun playKnead() {
+        ensureResumed()
+        val now = ctx.currentTime as Double
+
+        val osc = ctx.createOscillator()
+        osc.type = "sine"
+        osc.frequency.setValueAtTime(80, now)
+        osc.frequency.linearRampToValueAtTime(120, now + 0.15)
+        osc.frequency.linearRampToValueAtTime(80, now + 0.3)
+        val gain = ctx.createGain()
+        gain.gain.setValueAtTime(0.06, now)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35)
+        val filter = ctx.createBiquadFilter()
+        filter.type = "lowpass"
+        filter.frequency.setValueAtTime(200, now)
+        osc.connect(filter)
+        filter.connect(gain)
+        gain.connect(ctx.destination)
+        osc.start(now)
+        osc.stop(now + 0.4)
+    }
+
+    /** Resize — gentle whoosh that rises or falls based on direction */
+    fun playResize(expanding: Boolean) {
+        ensureResumed()
+        val now = ctx.currentTime as Double
+        val sr = ctx.sampleRate as Double
+
+        val noiseSize = (sr * 0.15).toInt()
+        val noiseBuf = ctx.createBuffer(1, noiseSize, ctx.sampleRate)
+        val noiseData = noiseBuf.getChannelData(0)
+        for (i in 0 until noiseSize) {
+            noiseData[i] = (kotlin.random.Random.nextDouble() * 2.0 - 1.0) * 0.1
+        }
+        val noise = ctx.createBufferSource()
+        noise.buffer = noiseBuf
+        val filter = ctx.createBiquadFilter()
+        filter.type = "bandpass"
+        if (expanding) {
+            filter.frequency.setValueAtTime(400, now)
+            filter.frequency.linearRampToValueAtTime(1200, now + 0.15)
+        } else {
+            filter.frequency.setValueAtTime(1200, now)
+            filter.frequency.linearRampToValueAtTime(400, now + 0.15)
+        }
+        filter.Q.setValueAtTime(1.5, now)
+        val gain = ctx.createGain()
+        gain.gain.setValueAtTime(0.08, now)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2)
+        noise.connect(filter)
+        filter.connect(gain)
+        gain.connect(ctx.destination)
+        noise.start(now)
+        noise.stop(now + 0.25)
+    }
+
+    /** Slice — sharp whoosh + clean separation: high-pass noise sweep + descending tone */
+    fun playSlice() {
+        ensureResumed()
+        val now = ctx.currentTime as Double
+        val sr = ctx.sampleRate as Double
+
+        // Layer 1: sharp whoosh (high-pass noise sweep — the cutting air sound)
+        val whooshSize = (sr * 0.35).toInt()
+        val whooshBuf = ctx.createBuffer(1, whooshSize, ctx.sampleRate)
+        val whooshData = whooshBuf.getChannelData(0)
+        for (i in 0 until whooshSize) {
+            whooshData[i] = (kotlin.random.Random.nextDouble() * 2.0 - 1.0) * 0.3
+        }
+        val whoosh = ctx.createBufferSource()
+        whoosh.buffer = whooshBuf
+        val whooshFilter = ctx.createBiquadFilter()
+        whooshFilter.type = "highpass"
+        whooshFilter.frequency.setValueAtTime(1500, now)
+        whooshFilter.frequency.exponentialRampToValueAtTime(300, now + 0.3)
+        whooshFilter.Q.setValueAtTime(1.5, now)
+        val whooshGain = ctx.createGain()
+        whooshGain.gain.setValueAtTime(0.0, now)
+        whooshGain.gain.linearRampToValueAtTime(0.25, now + 0.02)
+        whooshGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3)
+        whoosh.connect(whooshFilter)
+        whooshFilter.connect(whooshGain)
+        whooshGain.connect(ctx.destination)
+        whoosh.start(now)
+        whoosh.stop(now + 0.35)
+
+        // Layer 2: descending separation tone (the "split" feeling)
+        val tone = ctx.createOscillator()
+        tone.type = "sine"
+        tone.frequency.setValueAtTime(600, now)
+        tone.frequency.exponentialRampToValueAtTime(80, now + 0.4)
+        val toneGain = ctx.createGain()
+        toneGain.gain.setValueAtTime(0.15, now)
+        toneGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45)
+        tone.connect(toneGain)
+        toneGain.connect(ctx.destination)
+        tone.start(now)
+        tone.stop(now + 0.5)
+
+        // Layer 3: bright transient crack at the moment of slice
+        val crackSize = (sr * 0.03).toInt()
+        val crackBuf = ctx.createBuffer(1, crackSize, ctx.sampleRate)
+        val crackData = crackBuf.getChannelData(0)
+        for (i in 0 until crackSize) {
+            crackData[i] = (kotlin.random.Random.nextDouble() * 2.0 - 1.0) * 0.35
+        }
+        val crack = ctx.createBufferSource()
+        crack.buffer = crackBuf
+        val crackFilter = ctx.createBiquadFilter()
+        crackFilter.type = "bandpass"
+        crackFilter.frequency.setValueAtTime(3500, now)
+        crackFilter.Q.setValueAtTime(2.0, now)
+        val crackGain = ctx.createGain()
+        crackGain.gain.setValueAtTime(0.2, now)
+        crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05)
+        crack.connect(crackFilter)
+        crackFilter.connect(crackGain)
+        crackGain.connect(ctx.destination)
+        crack.start(now)
+        crack.stop(now + 0.08)
+    }
+
+    /** Pull — stretchy taffy-pull sound */
+    fun playPull() {
+        ensureResumed()
+        val now = ctx.currentTime as Double
+
+        val osc = ctx.createOscillator()
+        osc.type = "sine"
+        osc.frequency.setValueAtTime(150, now)
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.2)
+        osc.frequency.exponentialRampToValueAtTime(100, now + 0.4)
+        val gain = ctx.createGain()
+        gain.gain.setValueAtTime(0.07, now)
+        gain.gain.linearRampToValueAtTime(0.1, now + 0.15)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45)
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.start(now)
+        osc.stop(now + 0.5)
+    }
 }

@@ -21,17 +21,29 @@ class SpringPhysics(private val geometry: BufferGeometry) {
     var totalEnergy: Double = 0.0
         private set
 
-    // Foam rubber: soft spring, heavy damping — squishes and slowly puffs back
-    private val springConstant = 8.0
-    private val dampingCoeff = 4.5
-    var maxOffset = 1.2
-    var maxVelocity = 6.0
+    // Very soft, yielding — easy to dent, slow satisfying spring-back
+    private val springConstant = 1.8
+    private val dampingCoeff = 1.0
+    var maxOffset = 2.5
+    var maxVelocity = 10.0
+
+    // Volume preservation
+    private val originalAvgRadius: Double
+    var volumePreservation = 0.7  // 0 = off, 1 = rigid volume
 
     init {
         val posArray = posAttr.array
+        var radSum = 0.0
         for (i in 0 until vertexCount * 3) {
             originalPositions[i] = posArray[i]
         }
+        for (v in 0 until vertexCount) {
+            val ox = originalPositions[v * 3].toDouble()
+            val oy = originalPositions[v * 3 + 1].toDouble()
+            val oz = originalPositions[v * 3 + 2].toDouble()
+            radSum += sqrt(ox * ox + oy * oy + oz * oz)
+        }
+        originalAvgRadius = radSum / vertexCount
     }
 
     fun update(rawDt: Double) {
@@ -67,6 +79,28 @@ class SpringPhysics(private val geometry: BufferGeometry) {
         }
 
         totalEnergy = sqrt(energy / vertexCount)
+
+        // Volume preservation: if average radius changed, nudge vertices to compensate
+        if (volumePreservation > 0.0) {
+            var currentAvgRadius = 0.0
+            for (v in 0 until vertexCount) {
+                val cx = posArray[v * 3].toDouble()
+                val cy = posArray[v * 3 + 1].toDouble()
+                val cz = posArray[v * 3 + 2].toDouble()
+                currentAvgRadius += sqrt(cx * cx + cy * cy + cz * cz)
+            }
+            currentAvgRadius /= vertexCount
+            if (currentAvgRadius > 0.001) {
+                val ratio = originalAvgRadius / currentAvgRadius
+                val correction = 1.0 + (ratio - 1.0) * volumePreservation
+                if (abs(correction - 1.0) > 0.001) {
+                    for (i in 0 until vertexCount * 3) {
+                        posArray[i] = (posArray[i] * correction).toFloat()
+                    }
+                }
+            }
+        }
+
         posAttr.needsUpdate = true
         geometry.computeVertexNormals()
     }

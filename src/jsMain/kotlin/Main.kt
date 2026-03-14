@@ -1,6 +1,7 @@
 import audio.SoundEngine
 import deformation.DeformationController
 import deformation.SpringPhysics
+import deformation.WaveSystem
 import gesture.GestureEngine
 import gesture.HandGesture
 import kotlinx.browser.document
@@ -22,15 +23,15 @@ import kotlin.math.sqrt
 data class BallColor(val name: String, val r: Double, val g: Double, val b: Double)
 
 val BALL_COLORS = arrayOf(
-    BallColor("Lavender",   0.58, 0.48, 0.82),
-    BallColor("Soft Blue",  0.42, 0.62, 0.88),
-    BallColor("Teal",       0.35, 0.75, 0.72),
-    BallColor("Rose",       0.85, 0.48, 0.58),
-    BallColor("Peach",      0.92, 0.68, 0.52),
-    BallColor("Sage",       0.55, 0.75, 0.55),
-    BallColor("Sky",        0.52, 0.72, 0.92),
-    BallColor("Coral",      0.90, 0.52, 0.45),
-    BallColor("Sand",       0.82, 0.76, 0.62)
+    BallColor("Clear",      0.82, 0.90, 0.96),
+    BallColor("Aqua",       0.40, 0.80, 0.92),
+    BallColor("Ocean",      0.22, 0.52, 0.88),
+    BallColor("Rose",       0.92, 0.55, 0.65),
+    BallColor("Lime",       0.50, 0.88, 0.45),
+    BallColor("Sunset",     0.95, 0.62, 0.35),
+    BallColor("Grape",      0.58, 0.38, 0.85),
+    BallColor("Crystal",    0.90, 0.90, 0.95),
+    BallColor("Teal",       0.30, 0.78, 0.72)
 )
 
 val THEMES = arrayOf("", "theme-night", "theme-day")
@@ -38,7 +39,7 @@ val SCALE_MODES = arrayOf("", "scale-large", "scale-xl")
 val SCALE_LABELS = arrayOf("Normal", "Large", "Extra Large")
 
 // Reordered: calm jelly is the recommended default
-val STYLE_NAMES = arrayOf("Calm Jelly", "Soft Silicone", "Pearl Dream", "Cloud Foam")
+val STYLE_NAMES = arrayOf("Water Balloon", "Gel Ball", "Crystal Drop", "Soap Bubble")
 
 // Poke ripple tracking
 data class PokeEvent(val x: Double, val y: Double, val z: Double, val time: Double)
@@ -120,7 +121,7 @@ fun main() {
     scene.add(accentLight)
 
     // === Geometry ===
-    val geometry = IcosahedronGeometry(2.0, 4)
+    val geometry = SphereGeometry(2.0, 32, 24)
     val posAttr = geometry.getAttribute("position") as BufferAttribute
     val vertexCount = posAttr.count
     val colorArray = Float32Array(vertexCount * 3)
@@ -130,7 +131,7 @@ fun main() {
     geometry.computeVertexNormals()
 
     // === Procedural textures ===
-    val texSize = 512
+    val texSize = 256
 
     fun hash(ix: Int, iy: Int): Double {
         val n = ix * 374761393 + iy * 668265263
@@ -191,28 +192,31 @@ fun main() {
     foamRoughTex.wrapS = RepeatWrapping; foamRoughTex.wrapT = RepeatWrapping
     foamRoughTex.repeat.set(3.0, 3.0)
 
-    // === Material — starts as Calm Jelly (the recommended default) ===
+    // === Material — starts as Water Balloon (the recommended default) ===
     val material = MeshPhysicalMaterial(js("""({
         color: 0xffffff,
         vertexColors: true,
-        roughness: 0.06,
-        metalness: 0.02,
+        roughness: 0.02,
+        metalness: 0.0,
         clearcoat: 1.0,
-        clearcoatRoughness: 0.02,
-        sheen: 0.3,
-        sheenRoughness: 0.2,
+        clearcoatRoughness: 0.01,
+        sheen: 0.0,
+        sheenRoughness: 0.0,
         sheenColor: 0xffffff,
         iridescence: 0.15,
-        iridescenceIOR: 1.5,
+        iridescenceIOR: 1.33,
+        transmission: 0.85,
+        thickness: 1.5,
+        ior: 1.33,
         transparent: true,
-        opacity: 0.72,
-        envMapIntensity: 1.5
+        opacity: 0.95,
+        envMapIntensity: 2.0
     })"""))
     val blob = Mesh(geometry, material)
     scene.add(blob)
 
     // Soft shadow
-    val shadowGeo = IcosahedronGeometry(2.4, 1)
+    val shadowGeo = SphereGeometry(2.4, 16, 12)
     val shadowMat = MeshStandardMaterial(js("""({
         color: 0x000000, transparent: true, opacity: 0.08, roughness: 1.0, metalness: 0.0
     })"""))
@@ -224,10 +228,11 @@ fun main() {
     // Physics + deformation
     val springPhysics = SpringPhysics(geometry)
     val deformController = DeformationController(springPhysics)
+    val waveSystem = WaveSystem()
 
     // Sound
     val sound = SoundEngine()
-    var soundEnabled = false
+    var soundEnabled = true
 
     // Gesture recognition
     val gestureEngine = GestureEngine()
@@ -262,69 +267,81 @@ fun main() {
 
     fun applyStyle() {
         when (currentStyleIndex) {
-            0 -> { // Calm Jelly — translucent, glossy, soft inner glow
-                material.roughness = 0.06
-                material.metalness = 0.02
+            0 -> { // Water Balloon — refractive membrane, liquid interior
+                material.roughness = 0.02
+                material.metalness = 0.0
                 material.clearcoat = 1.0
-                material.clearcoatRoughness = 0.02
-                material.sheen = 0.3
-                material.sheenRoughness = 0.2
+                material.clearcoatRoughness = 0.01
+                material.sheen = 0.0
+                material.sheenRoughness = 0.0
                 material.iridescence = 0.15
-                material.iridescenceIOR = 1.5
+                material.iridescenceIOR = 1.33
+                material.transmission = 0.85
+                material.thickness = 1.5
+                material.ior = 1.33
                 material.transparent = true
-                material.opacity = 0.72
+                material.opacity = 0.95
                 material.bumpMap = null
                 material.bumpScale = 0.0
                 material.roughnessMap = null
-                material.envMapIntensity = 1.5
+                material.envMapIntensity = 2.0
             }
-            1 -> { // Soft Silicone — matte satin, subtle grain, tactile
-                material.roughness = 0.78
+            1 -> { // Gel Ball — thick viscous gel, translucent
+                material.roughness = 0.15
                 material.metalness = 0.0
-                material.clearcoat = 0.15
-                material.clearcoatRoughness = 0.7
-                material.sheen = 0.5
-                material.sheenRoughness = 0.7
+                material.clearcoat = 0.8
+                material.clearcoatRoughness = 0.1
+                material.sheen = 0.2
+                material.sheenRoughness = 0.4
                 material.iridescence = 0.0
-                material.iridescenceIOR = 1.3
-                material.transparent = false
-                material.opacity = 1.0
-                material.bumpMap = foamBumpTex
-                material.bumpScale = 0.1
-                material.roughnessMap = foamRoughTex
-                material.envMapIntensity = 0.4
-            }
-            2 -> { // Pearl Dream — iridescent, color-shifting, magical
-                material.roughness = 0.14
-                material.metalness = 0.08
-                material.clearcoat = 0.85
-                material.clearcoatRoughness = 0.08
-                material.sheen = 0.7
-                material.sheenRoughness = 0.25
-                material.iridescence = 1.0
-                material.iridescenceIOR = 1.8
+                material.iridescenceIOR = 1.5
+                material.transmission = 0.6
+                material.thickness = 2.5
+                material.ior = 1.45
                 material.transparent = true
-                material.opacity = 0.82
+                material.opacity = 0.9
                 material.bumpMap = foamBumpTex
-                material.bumpScale = 0.03
+                material.bumpScale = 0.04
                 material.roughnessMap = null
                 material.envMapIntensity = 1.2
             }
-            3 -> { // Cloud Foam — fluffy, pillowy, diffuse glow
-                material.roughness = 1.0
+            2 -> { // Crystal Drop — glass-clear, prismatic
+                material.roughness = 0.0
                 material.metalness = 0.0
-                material.clearcoat = 0.0
-                material.clearcoatRoughness = 1.0
-                material.sheen = 1.0
-                material.sheenRoughness = 0.85
-                material.iridescence = 0.0
-                material.iridescenceIOR = 1.3
-                material.transparent = false
-                material.opacity = 1.0
-                material.bumpMap = foamBumpTex
-                material.bumpScale = 0.18
-                material.roughnessMap = foamRoughTex
-                material.envMapIntensity = 0.15
+                material.clearcoat = 1.0
+                material.clearcoatRoughness = 0.0
+                material.sheen = 0.0
+                material.sheenRoughness = 0.0
+                material.iridescence = 0.8
+                material.iridescenceIOR = 2.0
+                material.transmission = 0.95
+                material.thickness = 0.5
+                material.ior = 1.8
+                material.transparent = true
+                material.opacity = 0.98
+                material.bumpMap = null
+                material.bumpScale = 0.0
+                material.roughnessMap = null
+                material.envMapIntensity = 2.5
+            }
+            3 -> { // Soap Bubble — ultra-thin, iridescent film
+                material.roughness = 0.0
+                material.metalness = 0.0
+                material.clearcoat = 1.0
+                material.clearcoatRoughness = 0.0
+                material.sheen = 0.0
+                material.sheenRoughness = 0.0
+                material.iridescence = 1.0
+                material.iridescenceIOR = 1.8
+                material.transmission = 0.92
+                material.thickness = 0.1
+                material.ior = 1.3
+                material.transparent = true
+                material.opacity = 0.5
+                material.bumpMap = null
+                material.bumpScale = 0.0
+                material.roughnessMap = null
+                material.envMapIntensity = 3.0
             }
         }
         material.needsUpdate = true
@@ -335,6 +352,7 @@ fun main() {
     val overlay = HtmlOverlay(
         onReset = {
             deformController.reset()
+            waveSystem.reset()
             if (soundEnabled) sound.playReset()
         },
         onToggleSound = {
@@ -402,6 +420,7 @@ fun main() {
             if (intersects.isNotEmpty()) {
                 val pt = intersects[0].point as Vector3
                 deformController.applyPoke(pt)
+                waveSystem.excite(-pt.x * 0.15, -pt.y * 0.15, -pt.z * 0.15, 0.6)
                 recentPokes.add(PokeEvent(pt.x, pt.y, pt.z, clock.getElapsedTime()))
                 if (recentPokes.size > 8) recentPokes.removeAt(0)
                 if (soundEnabled) sound.playPoke()
@@ -452,11 +471,13 @@ fun main() {
         if (currentSection == "deform") {
             if (" " in inputHandler.pressedKeys) {
                 deformController.applyPulse()
+                waveSystem.excite(0.0, 0.5, 0.0, 1.0)
                 if (soundEnabled) sound.playPulse()
                 inputHandler.pressedKeys.remove(" ")
             }
             if ("r" in inputHandler.pressedKeys || "R" in inputHandler.pressedKeys) {
                 deformController.reset()
+                waveSystem.reset()
                 if (soundEnabled) sound.playReset()
                 inputHandler.pressedKeys.remove("r"); inputHandler.pressedKeys.remove("R")
             }
@@ -472,9 +493,14 @@ fun main() {
                 sound.playSquish(springPhysics.totalEnergy.coerceAtMost(1.0))
                 squishSoundCooldown = 0.15
             }
-            if (!deformController.isDeforming()) springPhysics.decayTargets(1.8, dt)
+            if (!deformController.isDeforming()) {
+                // Slower decay when gesture fingers are actively touching the ball
+                val decayRate = if (gestureEngine.enabled && gestureEngine.handDetected) 0.15 else 1.0
+                springPhysics.decayTargets(decayRate, dt)
+            }
         } else {
-            springPhysics.decayTargets(1.8, dt)
+            val decayRate = if (gestureEngine.enabled && gestureEngine.handDetected) 0.15 else 1.0
+            springPhysics.decayTargets(decayRate, dt)
         }
 
         // === Gesture input ===
@@ -482,40 +508,94 @@ fun main() {
         if (gestureEngine.enabled && gestureEngine.handDetected) {
             if (currentSection == "deform") {
                 gesturePokeCooldown = (gesturePokeCooldown - dt).coerceAtLeast(0.0)
-                when (gestureEngine.currentGesture) {
-                    HandGesture.OPEN -> {
-                        // Expand: stretch up + widen
-                        val gestureKeys = mutableSetOf("w", "d")
-                        deformController.applyKeyboardDeformation(gestureKeys, dt * 0.7)
-                        if (soundEnabled && squishSoundCooldown <= 0.0) {
-                            sound.playExpand()
-                            squishSoundCooldown = 0.15
-                        }
+
+                // === ALWAYS: proximity-based finger + palm contact ===
+                // Generous contact zone — you just need to be roughly near the ball
+                val ballRadius = 2.0
+                val contactThreshold = 4.5  // very forgiving — wide interaction zone
+                var fingerContactCount = 0
+
+                // Helper: unproject NDC to closest-point-on-ray to ball center
+                fun ndcToContact(nx: Double, ny: Double): Triple<Double, Double, Double>? {
+                    val nearPt = Vector3(nx, ny, 0.0).unproject(camera)
+                    val farPt = Vector3(nx, ny, 1.0).unproject(camera)
+                    val dx = farPt.x - nearPt.x
+                    val dy = farPt.y - nearPt.y
+                    val dz = farPt.z - nearPt.z
+                    val dl = sqrt(dx * dx + dy * dy + dz * dz)
+                    if (dl < 0.001) return null
+                    val ndx = dx / dl; val ndy = dy / dl; val ndz = dz / dl
+                    val t = -(nearPt.x * ndx + nearPt.y * ndy + nearPt.z * ndz)
+                    val cx = nearPt.x + ndx * t
+                    val cy = nearPt.y + ndy * t
+                    val cz = nearPt.z + ndz * t
+                    val dist = sqrt(cx * cx + cy * cy + cz * cz)
+                    return if (dist < contactThreshold) Triple(cx, cy, cz) else null
+                }
+
+                // Each fingertip pushes into the ball
+                val fingerNDCs = gestureEngine.getAllFingerNDC()
+                for ((fndcX, fndcY) in fingerNDCs) {
+                    val contact = ndcToContact(fndcX, fndcY) ?: continue
+                    val (cx, cy, cz) = contact
+                    val dist = sqrt(cx * cx + cy * cy + cz * cz)
+                    val penetration = ((contactThreshold - dist) / (contactThreshold - ballRadius)).coerceIn(0.0, 1.0)
+                    val contactPt = Vector3(cx, cy, cz)
+                    deformController.applyPoke(contactPt, radius = 1.4, strength = -0.7 * penetration * dt * 60.0)
+                    fingerContactCount++
+                }
+
+                // Palm also pushes — broad, soft pressure
+                val (palmNx, palmNy) = gestureEngine.getPalmNDC()
+                val palmContact = ndcToContact(palmNx, palmNy)
+                if (palmContact != null) {
+                    val (px, py, pz) = palmContact
+                    val palmDist = sqrt(px * px + py * py + pz * pz)
+                    val palmPen = ((contactThreshold - palmDist) / (contactThreshold - ballRadius)).coerceIn(0.0, 1.0)
+                    val palmPt = Vector3(px, py, pz)
+                    deformController.applyPoke(palmPt, radius = 2.0, strength = -0.4 * palmPen * dt * 60.0)
+                }
+
+                // Hand movement always drags the surface (for pulling/shaping)
+                if (gestureEngine.handVelocity > 0.003 && palmContact != null) {
+                    val (px, py, pz) = palmContact
+                    val palmPt = Vector3(px, py, pz)
+                    deformController.applyPull(
+                        palmPt,
+                        -gestureEngine.handDeltaX * 20.0,
+                        -gestureEngine.handDeltaY * 20.0,
+                        strength = 1.5
+                    )
+                }
+
+                if (fingerContactCount > 0 || palmContact != null) {
+                    waveSystem.excite(
+                        -gestureEngine.handDeltaX * 0.2,
+                        -gestureEngine.handDeltaY * 0.2,
+                        0.0, 0.05 * (fingerContactCount + 1)
+                    )
+                    if (soundEnabled && squishSoundCooldown <= 0.0) {
+                        sound.playSquish(0.2 + fingerContactCount * 0.08)
+                        squishSoundCooldown = 0.12
                     }
+                }
+
+                // === Gesture-specific actions (on top of always-on finger contact) ===
+                when (gestureEngine.currentGesture) {
+                    // OPEN + CLOSE: core interaction is handled by finger+palm contact above
+                    // These just add sound variation
+                    HandGesture.OPEN -> {}
                     HandGesture.CLOSE -> {
-                        // Squeeze inward
-                        val gestureKeys = mutableSetOf("f")
-                        deformController.applyKeyboardDeformation(gestureKeys, dt)
                         if (soundEnabled && squishSoundCooldown <= 0.0) {
                             sound.playSqueeze()
-                            squishSoundCooldown = 0.15
+                            squishSoundCooldown = 0.12
                         }
                     }
+                    // POINTER: finger contact handles the poke, just add sound
                     HandGesture.POINTER -> {
-                        // Poke at fingertip position (throttled)
-                        if (gesturePokeCooldown <= 0.0) {
-                            val (ndcX, ndcY) = gestureEngine.getFingerNDC()
-                            mouseVec.set(ndcX, ndcY)
-                            raycaster.setFromCamera(mouseVec, camera)
-                            val intersects = raycaster.intersectObject(blob)
-                            if (intersects.isNotEmpty()) {
-                                val pt = intersects[0].point as Vector3
-                                deformController.applyPoke(pt, radius = 0.8, strength = -0.3)
-                                recentPokes.add(PokeEvent(pt.x, pt.y, pt.z, elapsed))
-                                if (recentPokes.size > 8) recentPokes.removeAt(0)
-                                if (soundEnabled) sound.playPoke()
-                            }
-                            gesturePokeCooldown = 0.15
+                        if (soundEnabled && fingerContactCount > 0 && squishSoundCooldown <= 0.0) {
+                            sound.playPoke()
+                            squishSoundCooldown = 0.08
                         }
                     }
                     HandGesture.VICTORY -> {
@@ -530,6 +610,7 @@ fun main() {
                     HandGesture.OK -> {
                         if (gestureEngine.shouldReset()) {
                             deformController.reset()
+                            waveSystem.reset()
                             if (soundEnabled) sound.playReset()
                         }
                     }
@@ -543,6 +624,7 @@ fun main() {
                     HandGesture.SPREAD -> {
                         if (gestureEngine.shouldExplode()) {
                             deformController.applyExplode()
+                            waveSystem.excite(0.5, 0.8, 0.3, 3.0)
                             if (soundEnabled) sound.playExplode()
                         }
                     }
@@ -554,12 +636,100 @@ fun main() {
                     }
                     HandGesture.PUNCH -> {
                         if (gestureEngine.shouldPunch()) {
-                            // Punch direction from hand movement (mirrored)
-                            deformController.applyPunch(
-                                -gestureEngine.handDeltaX * 20.0,
-                                -gestureEngine.handDeltaY * 20.0
+                            deformController.applyExplode()
+                            waveSystem.excite(0.5, 0.8, 0.3, 3.0)
+                            if (soundEnabled) sound.playExplode()
+                        }
+                    }
+                    HandGesture.PINCH -> {
+                        // Continuous pinch deformation — thumb+index pinching the ball
+                        if (gesturePokeCooldown <= 0.0 && gestureEngine.pinchAmount > 0.2) {
+                            val (ndcX, ndcY) = gestureEngine.getFingerNDC()
+                            mouseVec.set(ndcX, ndcY)
+                            raycaster.setFromCamera(mouseVec, camera)
+                            val intersects = raycaster.intersectObject(blob)
+                            if (intersects.isNotEmpty()) {
+                                val pt = intersects[0].point as Vector3
+                                deformController.applyPinch(pt, gestureEngine.pinchAmount, radius = 0.8)
+                                recentPokes.add(PokeEvent(pt.x, pt.y, pt.z, elapsed))
+                                if (recentPokes.size > 8) recentPokes.removeAt(0)
+                            }
+                            if (soundEnabled && squishSoundCooldown <= 0.0) {
+                                sound.playPinch(gestureEngine.pinchAmount)
+                                squishSoundCooldown = 0.08
+                            }
+                            gesturePokeCooldown = 0.05
+                        }
+                    }
+                    HandGesture.PULL -> {
+                        // Pull — pinching and pulling outward stretches the ball
+                        if (gestureEngine.shouldPull()) {
+                            val (ndcX, ndcY) = gestureEngine.getFingerNDC()
+                            mouseVec.set(ndcX, ndcY)
+                            raycaster.setFromCamera(mouseVec, camera)
+                            val intersects = raycaster.intersectObject(blob)
+                            if (intersects.isNotEmpty()) {
+                                val pt = intersects[0].point as Vector3
+                                deformController.applyPull(
+                                    pt,
+                                    -gestureEngine.handDeltaX * 15.0,
+                                    -gestureEngine.handDeltaY * 15.0
+                                )
+                                recentPokes.add(PokeEvent(pt.x, pt.y, pt.z, elapsed))
+                                if (recentPokes.size > 8) recentPokes.removeAt(0)
+                            }
+                            if (soundEnabled) sound.playPull()
+                        }
+                    }
+                    HandGesture.SLAP -> {
+                        // Open-hand slap — broad impact with wobble
+                        if (gestureEngine.shouldSlap()) {
+                            deformController.applySlap(
+                                -gestureEngine.handDeltaX * 15.0,
+                                -gestureEngine.handDeltaY * 15.0
                             )
-                            if (soundEnabled) sound.playPunch()
+                            waveSystem.excite(-gestureEngine.handDeltaX, -gestureEngine.handDeltaY, -0.3, 1.5)
+                            if (soundEnabled) sound.playSlap()
+                        }
+                    }
+                    HandGesture.SLICE -> {
+                        // Karate chop slice — cuts the ball in two along the hand's movement direction
+                        if (gestureEngine.shouldSlice()) {
+                            // Slice plane normal is perpendicular to hand movement direction
+                            // Hand moves in X/Y, so the slice plane normal is rotated 90 degrees
+                            val dx = -gestureEngine.handDeltaX
+                            val dy = -gestureEngine.handDeltaY
+                            val dLen = sqrt(dx * dx + dy * dy)
+                            // Normal perpendicular to movement: rotate 90 degrees
+                            val nx = if (dLen > 0.001) -dy / dLen else 1.0
+                            val ny = if (dLen > 0.001) dx / dLen else 0.0
+                            val nz = 0.0
+                            deformController.applySlice(nx, ny, nz)
+                            waveSystem.excite(nx * 0.5, ny * 0.5, 0.0, 2.0)
+                            if (soundEnabled) sound.playSlice()
+                        }
+                    }
+                    HandGesture.KNEAD -> {
+                        // Continuous kneading — dough-like manipulation
+                        deformController.applyKnead(
+                            gestureEngine.kneadIntensity * kotlin.math.PI * 2.0,
+                            0.8,
+                            dt
+                        )
+                        if (soundEnabled && squishSoundCooldown <= 0.0) {
+                            sound.playKnead()
+                            squishSoundCooldown = 0.3
+                        }
+                    }
+                    HandGesture.TWO_HAND_RESIZE -> {
+                        // Two-hand resize — spread hands apart to grow, bring together to shrink
+                        val resizeDelta = gestureEngine.twoHandResizeDelta
+                        if (kotlin.math.abs(resizeDelta) > 0.001) {
+                            deformController.applyResize(resizeDelta * 8.0, dt)
+                            if (soundEnabled && squishSoundCooldown <= 0.0) {
+                                sound.playResize(resizeDelta > 0)
+                                squishSoundCooldown = 0.15
+                            }
                         }
                     }
                     HandGesture.NONE -> {}
@@ -580,16 +750,12 @@ fun main() {
         }
 
         // Rotation (mouse + gesture)
+        // When hand is detected, freeze rotation so the ball is easy to sculpt
+        val handActive = gestureEngine.enabled && gestureEngine.handDetected
         val (rotX, rotY) = inputHandler.updateRotationInertia(dt)
         if (rotX != 0.0 || rotY != 0.0) {
             blob.rotation.x += rotX; blob.rotation.y += rotY
-        } else if (gestureEngine.enabled && gestureEngine.handDetected &&
-                   gestureEngine.currentGesture == HandGesture.NONE) {
-            // Hand visible but no gesture → use hand movement for rotation
-            val (gRotX, gRotY) = gestureEngine.getRotationDelta()
-            blob.rotation.x += gRotX
-            blob.rotation.y += gRotY
-        } else if (!inputHandler.isMouseDown) {
+        } else if (!handActive && !inputHandler.isMouseDown) {
             blob.rotation.y += if (currentSection == "calm") 0.0006 else 0.0015
         }
 
@@ -620,6 +786,7 @@ fun main() {
                 if (intersects.isNotEmpty()) {
                     val pt = intersects[0].point as Vector3
                     deformController.applyPoke(pt)
+                    waveSystem.excite(-pt.x * 0.15, -pt.y * 0.15, -pt.z * 0.15, 0.6)
                     recentPokes.add(PokeEvent(pt.x, pt.y, pt.z, elapsed))
                     if (recentPokes.size > 8) recentPokes.removeAt(0)
                     if (soundEnabled) sound.playPoke()
@@ -632,12 +799,35 @@ fun main() {
         // Physics
         springPhysics.update(dt)
 
-        // Gradually restore boosted limits after dramatic effects (explode/scramble/punch)
-        if (springPhysics.maxOffset > 1.2) {
-            springPhysics.maxOffset = (springPhysics.maxOffset - dt * 1.5).coerceAtLeast(1.2)
+        // Wave overlay — coherent sloshing across the water balloon surface
+        waveSystem.update(dt)
+        if (waveSystem.totalEnergy > 0.001) {
+            for (v in 0 until vertexCount) {
+                val wox = springPhysics.getOriginalX(v)
+                val woy = springPhysics.getOriginalY(v)
+                val woz = springPhysics.getOriginalZ(v)
+                val wlen = sqrt(wox * wox + woy * woy + woz * woz)
+                if (wlen > 0.001) {
+                    val wnx = wox / wlen; val wny = woy / wlen; val wnz = woz / wlen
+                    val wr = waveSystem.getRadialOffset(wnx, wny, wnz)
+                    posAttr.array[v * 3] = posAttr.array[v * 3] + (wnx * wr).toFloat()
+                    posAttr.array[v * 3 + 1] = posAttr.array[v * 3 + 1] + (wny * wr).toFloat()
+                    posAttr.array[v * 3 + 2] = posAttr.array[v * 3 + 2] + (wnz * wr).toFloat()
+                }
+            }
+            posAttr.needsUpdate = true
+            geometry.computeVertexNormals()
         }
-        if (springPhysics.maxVelocity > 6.0) {
-            springPhysics.maxVelocity = (springPhysics.maxVelocity - dt * 7.0).coerceAtLeast(6.0)
+
+        // Gradually restore boosted limits after dramatic effects (explode/scramble/punch)
+        if (springPhysics.maxOffset > 2.0) {
+            springPhysics.maxOffset = (springPhysics.maxOffset - dt * 1.5).coerceAtLeast(2.0)
+        }
+        if (springPhysics.maxVelocity > 10.0) {
+            springPhysics.maxVelocity = (springPhysics.maxVelocity - dt * 7.0).coerceAtLeast(10.0)
+        }
+        if (springPhysics.volumePreservation < 0.7) {
+            springPhysics.volumePreservation = (springPhysics.volumePreservation + dt * 0.3).coerceAtMost(0.7)
         }
 
         if (soundEnabled) sound.updateDrone(springPhysics.totalEnergy.coerceAtMost(2.0) / 2.0)
@@ -654,30 +844,35 @@ fun main() {
         val compressStr: Double
         val stretchStr: Double
         val driftAmp: Double
+        val causticStr: Double
         // Fresnel tint (r, g, b) per style
         var frTintR: Double; var frTintG: Double; var frTintB: Double
         val pearlescent: Boolean
 
         when (currentStyleIndex) {
-            0 -> { // Calm Jelly
-                fresnelStr = 0.35; subsurfaceStr = 0.12; rippleStr = 0.35
-                shimmerAmp = 0.05; compressStr = 0.15; stretchStr = 0.25; driftAmp = 0.06
-                frTintR = 0.7; frTintG = 0.82; frTintB = 1.0; pearlescent = false
+            0 -> { // Water Balloon
+                fresnelStr = 0.5; subsurfaceStr = 0.06; rippleStr = 0.4
+                shimmerAmp = 0.03; compressStr = 0.2; stretchStr = 0.3; driftAmp = 0.04
+                causticStr = 0.25
+                frTintR = 0.7; frTintG = 0.85; frTintB = 1.0; pearlescent = false
             }
-            1 -> { // Soft Silicone
-                fresnelStr = 0.1; subsurfaceStr = 0.03; rippleStr = 0.15
-                shimmerAmp = 0.02; compressStr = 0.28; stretchStr = 0.12; driftAmp = 0.03
-                frTintR = 0.92; frTintG = 0.88; frTintB = 0.78; pearlescent = false
+            1 -> { // Gel Ball
+                fresnelStr = 0.2; subsurfaceStr = 0.15; rippleStr = 0.25
+                shimmerAmp = 0.04; compressStr = 0.25; stretchStr = 0.15; driftAmp = 0.05
+                causticStr = 0.12
+                frTintR = 0.85; frTintG = 0.9; frTintB = 0.8; pearlescent = false
             }
-            2 -> { // Pearl Dream
-                fresnelStr = 0.45; subsurfaceStr = 0.08; rippleStr = 0.4
-                shimmerAmp = 0.08; compressStr = 0.12; stretchStr = 0.2; driftAmp = 0.07
-                frTintR = 0.8; frTintG = 0.7; frTintB = 1.0; pearlescent = true
+            2 -> { // Crystal Drop
+                fresnelStr = 0.6; subsurfaceStr = 0.04; rippleStr = 0.5
+                shimmerAmp = 0.06; compressStr = 0.1; stretchStr = 0.25; driftAmp = 0.05
+                causticStr = 0.35
+                frTintR = 0.8; frTintG = 0.75; frTintB = 1.0; pearlescent = true
             }
-            else -> { // Cloud Foam
-                fresnelStr = 0.08; subsurfaceStr = 0.18; rippleStr = 0.1
-                shimmerAmp = 0.025; compressStr = 0.1; stretchStr = 0.08; driftAmp = 0.03
-                frTintR = 0.92; frTintG = 0.9; frTintB = 0.84; pearlescent = false
+            else -> { // Soap Bubble
+                fresnelStr = 0.7; subsurfaceStr = 0.02; rippleStr = 0.3
+                shimmerAmp = 0.08; compressStr = 0.05; stretchStr = 0.15; driftAmp = 0.06
+                causticStr = 0.15
+                frTintR = 0.9; frTintG = 0.85; frTintB = 1.0; pearlescent = true
             }
         }
 
@@ -748,6 +943,12 @@ fun main() {
             val shimY = oz * 2.0 + elapsed * 0.1
             val shimmer = (smoothNoise(shimX, shimY) - 0.5) * shimmerAmp
 
+            // === Caustic highlights — refracted light patterns like water ===
+            val caustScale = 3.0
+            val c1 = smoothNoise(ox * caustScale + elapsed * 0.3, oz * caustScale + elapsed * 0.2)
+            val c2 = smoothNoise(oy * caustScale * 1.5 - elapsed * 0.25, oz * caustScale * 1.5 + elapsed * 0.15)
+            val caustic = ((c1 + c2 - 0.8) * 3.0).coerceIn(0.0, 1.0) * causticStr
+
             // === Deformation response ===
             val deform = springPhysics.deformationMagnitudes[v].toDouble()
             val stretchGlow = (deform / 1.0).coerceIn(0.0, 1.0) * stretchStr
@@ -790,6 +991,11 @@ fun main() {
             r += rippleGlow * 0.9
             g += rippleGlow * 0.92
             b += rippleGlow * 0.95
+
+            // Add caustic highlights (blue-white shimmer)
+            r += caustic * 0.85
+            g += caustic * 0.92
+            b += caustic * 1.0
 
             colors[v * 3] = r.coerceIn(0.0, 1.0).toFloat()
             colors[v * 3 + 1] = g.coerceIn(0.0, 1.0).toFloat()

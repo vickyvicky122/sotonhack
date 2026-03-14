@@ -75,13 +75,12 @@ class HtmlOverlay(
             </div>
             <div class="deform-controls">
                 <button class="pill-btn" id="btnReset">Reset</button>
-                <button class="pill-btn" id="btnSound">Sound Off</button>
+                <button class="pill-btn" id="btnSound">Sound ON</button>
                 <button class="pill-btn" id="btnTheme">Theme</button>
                 <button class="pill-btn" id="btnColor">Color</button>
                 <button class="pill-btn" id="btnStyle">Calm Jelly</button>
                 <button class="pill-btn" id="btnScale">Normal</button>
-                <button class="pill-btn" id="btnGesture">Gesture Off</button>
-                <button class="pill-btn" id="btnCamPreview">Camera Off</button>
+                <button class="pill-btn" id="btnGesture">Gesture ON</button>
             </div>
         """.trimIndent())
         document.body?.appendChild(sectionDeform!!)
@@ -97,7 +96,6 @@ class HtmlOverlay(
         document.getElementById("btnStyle")?.addEventListener("click", { onCycleStyle() })
         document.getElementById("btnScale")?.addEventListener("click", { onCycleScale() })
         document.getElementById("btnGesture")?.addEventListener("click", { onToggleGesture() })
-        document.getElementById("btnCamPreview")?.addEventListener("click", { toggleCameraPreview() })
 
         // -- Section: Focus (Breathing) --
         sectionFocus = createSection("section-focus", """
@@ -235,7 +233,7 @@ class HtmlOverlay(
     fun isQuoteVisible(): Boolean = quoteVisible
 
     fun updateSoundLabel(on: Boolean) {
-        soundBtn?.textContent = if (on) "Sound On" else "Sound Off"
+        soundBtn?.textContent = if (on) "Sound ON" else "Sound OFF"
     }
 
     fun updateScaleLabel(label: String) {
@@ -248,23 +246,9 @@ class HtmlOverlay(
 
     fun updateGestureLabel(on: Boolean) {
         (document.getElementById("btnGesture") as? HTMLElement)?.textContent =
-            if (on) "Gesture On" else "Gesture Off"
-        // Hide camera preview when gesture is turned off
-        if (!on) {
-            cameraPreviewOn = false
-            (document.getElementById("btnCamPreview") as? HTMLElement)?.textContent = "Camera Off"
-            js("window._cameraPreviewOn=false")
-            js("var cp=document.getElementById('cameraPreview');if(cp)cp.style.display='none'")
-        }
-    }
-
-    private var cameraPreviewOn = false
-
-    private fun toggleCameraPreview() {
-        cameraPreviewOn = !cameraPreviewOn
-        (document.getElementById("btnCamPreview") as? HTMLElement)?.textContent =
-            if (cameraPreviewOn) "Camera On" else "Camera Off"
-        if (cameraPreviewOn) {
+            if (on) "Gesture ON" else "Gesture OFF"
+        // Auto-toggle camera preview with gesture
+        if (on) {
             js("window._cameraPreviewOn = true")
             js("if(!document.getElementById('cameraPreview')){var c=document.createElement('canvas');c.id='cameraPreview';c.className='camera-preview';c.width=320;c.height=240;document.body.appendChild(c);}")
             js("document.getElementById('cameraPreview').style.display=''")

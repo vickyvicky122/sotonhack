@@ -687,6 +687,72 @@ class SoundEngine {
         noise.stop(now + 0.25)
     }
 
+    /** Slice — sharp whoosh + clean separation: high-pass noise sweep + descending tone */
+    fun playSlice() {
+        ensureResumed()
+        val now = ctx.currentTime as Double
+        val sr = ctx.sampleRate as Double
+
+        // Layer 1: sharp whoosh (high-pass noise sweep — the cutting air sound)
+        val whooshSize = (sr * 0.35).toInt()
+        val whooshBuf = ctx.createBuffer(1, whooshSize, ctx.sampleRate)
+        val whooshData = whooshBuf.getChannelData(0)
+        for (i in 0 until whooshSize) {
+            whooshData[i] = (kotlin.random.Random.nextDouble() * 2.0 - 1.0) * 0.3
+        }
+        val whoosh = ctx.createBufferSource()
+        whoosh.buffer = whooshBuf
+        val whooshFilter = ctx.createBiquadFilter()
+        whooshFilter.type = "highpass"
+        whooshFilter.frequency.setValueAtTime(1500, now)
+        whooshFilter.frequency.exponentialRampToValueAtTime(300, now + 0.3)
+        whooshFilter.Q.setValueAtTime(1.5, now)
+        val whooshGain = ctx.createGain()
+        whooshGain.gain.setValueAtTime(0.0, now)
+        whooshGain.gain.linearRampToValueAtTime(0.25, now + 0.02)
+        whooshGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3)
+        whoosh.connect(whooshFilter)
+        whooshFilter.connect(whooshGain)
+        whooshGain.connect(ctx.destination)
+        whoosh.start(now)
+        whoosh.stop(now + 0.35)
+
+        // Layer 2: descending separation tone (the "split" feeling)
+        val tone = ctx.createOscillator()
+        tone.type = "sine"
+        tone.frequency.setValueAtTime(600, now)
+        tone.frequency.exponentialRampToValueAtTime(80, now + 0.4)
+        val toneGain = ctx.createGain()
+        toneGain.gain.setValueAtTime(0.15, now)
+        toneGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45)
+        tone.connect(toneGain)
+        toneGain.connect(ctx.destination)
+        tone.start(now)
+        tone.stop(now + 0.5)
+
+        // Layer 3: bright transient crack at the moment of slice
+        val crackSize = (sr * 0.03).toInt()
+        val crackBuf = ctx.createBuffer(1, crackSize, ctx.sampleRate)
+        val crackData = crackBuf.getChannelData(0)
+        for (i in 0 until crackSize) {
+            crackData[i] = (kotlin.random.Random.nextDouble() * 2.0 - 1.0) * 0.35
+        }
+        val crack = ctx.createBufferSource()
+        crack.buffer = crackBuf
+        val crackFilter = ctx.createBiquadFilter()
+        crackFilter.type = "bandpass"
+        crackFilter.frequency.setValueAtTime(3500, now)
+        crackFilter.Q.setValueAtTime(2.0, now)
+        val crackGain = ctx.createGain()
+        crackGain.gain.setValueAtTime(0.2, now)
+        crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05)
+        crack.connect(crackFilter)
+        crackFilter.connect(crackGain)
+        crackGain.connect(ctx.destination)
+        crack.start(now)
+        crack.stop(now + 0.08)
+    }
+
     /** Pull — stretchy taffy-pull sound */
     fun playPull() {
         ensureResumed()

@@ -232,7 +232,7 @@ fun main() {
 
     // Sound
     val sound = SoundEngine()
-    var soundEnabled = false
+    var soundEnabled = true
 
     // Gesture recognition
     val gestureEngine = GestureEngine()
@@ -493,9 +493,14 @@ fun main() {
                 sound.playSquish(springPhysics.totalEnergy.coerceAtMost(1.0))
                 squishSoundCooldown = 0.15
             }
-            if (!deformController.isDeforming()) springPhysics.decayTargets(1.0, dt)
+            if (!deformController.isDeforming()) {
+                // Slower decay when gesture fingers are actively touching the ball
+                val decayRate = if (gestureEngine.enabled && gestureEngine.handDetected) 0.15 else 1.0
+                springPhysics.decayTargets(decayRate, dt)
+            }
         } else {
-            springPhysics.decayTargets(1.0, dt)
+            val decayRate = if (gestureEngine.enabled && gestureEngine.handDetected) 0.15 else 1.0
+            springPhysics.decayTargets(decayRate, dt)
         }
 
         // === Gesture input ===
@@ -503,41 +508,94 @@ fun main() {
         if (gestureEngine.enabled && gestureEngine.handDetected) {
             if (currentSection == "deform") {
                 gesturePokeCooldown = (gesturePokeCooldown - dt).coerceAtLeast(0.0)
-                when (gestureEngine.currentGesture) {
-                    HandGesture.OPEN -> {
-                        // Expand: stretch up + widen
-                        val gestureKeys = mutableSetOf("w", "d")
-                        deformController.applyKeyboardDeformation(gestureKeys, dt * 0.7)
-                        if (soundEnabled && squishSoundCooldown <= 0.0) {
-                            sound.playExpand()
-                            squishSoundCooldown = 0.15
-                        }
+
+                // === ALWAYS: proximity-based finger + palm contact ===
+                // Generous contact zone — you just need to be roughly near the ball
+                val ballRadius = 2.0
+                val contactThreshold = 4.5  // very forgiving — wide interaction zone
+                var fingerContactCount = 0
+
+                // Helper: unproject NDC to closest-point-on-ray to ball center
+                fun ndcToContact(nx: Double, ny: Double): Triple<Double, Double, Double>? {
+                    val nearPt = Vector3(nx, ny, 0.0).unproject(camera)
+                    val farPt = Vector3(nx, ny, 1.0).unproject(camera)
+                    val dx = farPt.x - nearPt.x
+                    val dy = farPt.y - nearPt.y
+                    val dz = farPt.z - nearPt.z
+                    val dl = sqrt(dx * dx + dy * dy + dz * dz)
+                    if (dl < 0.001) return null
+                    val ndx = dx / dl; val ndy = dy / dl; val ndz = dz / dl
+                    val t = -(nearPt.x * ndx + nearPt.y * ndy + nearPt.z * ndz)
+                    val cx = nearPt.x + ndx * t
+                    val cy = nearPt.y + ndy * t
+                    val cz = nearPt.z + ndz * t
+                    val dist = sqrt(cx * cx + cy * cy + cz * cz)
+                    return if (dist < contactThreshold) Triple(cx, cy, cz) else null
+                }
+
+                // Each fingertip pushes into the ball
+                val fingerNDCs = gestureEngine.getAllFingerNDC()
+                for ((fndcX, fndcY) in fingerNDCs) {
+                    val contact = ndcToContact(fndcX, fndcY) ?: continue
+                    val (cx, cy, cz) = contact
+                    val dist = sqrt(cx * cx + cy * cy + cz * cz)
+                    val penetration = ((contactThreshold - dist) / (contactThreshold - ballRadius)).coerceIn(0.0, 1.0)
+                    val contactPt = Vector3(cx, cy, cz)
+                    deformController.applyPoke(contactPt, radius = 1.4, strength = -0.7 * penetration * dt * 60.0)
+                    fingerContactCount++
+                }
+
+                // Palm also pushes — broad, soft pressure
+                val (palmNx, palmNy) = gestureEngine.getPalmNDC()
+                val palmContact = ndcToContact(palmNx, palmNy)
+                if (palmContact != null) {
+                    val (px, py, pz) = palmContact
+                    val palmDist = sqrt(px * px + py * py + pz * pz)
+                    val palmPen = ((contactThreshold - palmDist) / (contactThreshold - ballRadius)).coerceIn(0.0, 1.0)
+                    val palmPt = Vector3(px, py, pz)
+                    deformController.applyPoke(palmPt, radius = 2.0, strength = -0.4 * palmPen * dt * 60.0)
+                }
+
+                // Hand movement always drags the surface (for pulling/shaping)
+                if (gestureEngine.handVelocity > 0.003 && palmContact != null) {
+                    val (px, py, pz) = palmContact
+                    val palmPt = Vector3(px, py, pz)
+                    deformController.applyPull(
+                        palmPt,
+                        -gestureEngine.handDeltaX * 20.0,
+                        -gestureEngine.handDeltaY * 20.0,
+                        strength = 1.5
+                    )
+                }
+
+                if (fingerContactCount > 0 || palmContact != null) {
+                    waveSystem.excite(
+                        -gestureEngine.handDeltaX * 0.2,
+                        -gestureEngine.handDeltaY * 0.2,
+                        0.0, 0.05 * (fingerContactCount + 1)
+                    )
+                    if (soundEnabled && squishSoundCooldown <= 0.0) {
+                        sound.playSquish(0.2 + fingerContactCount * 0.08)
+                        squishSoundCooldown = 0.12
                     }
+                }
+
+                // === Gesture-specific actions (on top of always-on finger contact) ===
+                when (gestureEngine.currentGesture) {
+                    // OPEN + CLOSE: core interaction is handled by finger+palm contact above
+                    // These just add sound variation
+                    HandGesture.OPEN -> {}
                     HandGesture.CLOSE -> {
-                        // Squeeze inward
-                        val gestureKeys = mutableSetOf("f")
-                        deformController.applyKeyboardDeformation(gestureKeys, dt)
                         if (soundEnabled && squishSoundCooldown <= 0.0) {
                             sound.playSqueeze()
-                            squishSoundCooldown = 0.15
+                            squishSoundCooldown = 0.12
                         }
                     }
+                    // POINTER: finger contact handles the poke, just add sound
                     HandGesture.POINTER -> {
-                        // Poke at fingertip position (throttled)
-                        if (gesturePokeCooldown <= 0.0) {
-                            val (ndcX, ndcY) = gestureEngine.getFingerNDC()
-                            mouseVec.set(ndcX, ndcY)
-                            raycaster.setFromCamera(mouseVec, camera)
-                            val intersects = raycaster.intersectObject(blob)
-                            if (intersects.isNotEmpty()) {
-                                val pt = intersects[0].point as Vector3
-                                deformController.applyPoke(pt, radius = 0.8, strength = -0.3)
-                                waveSystem.excite(-pt.x * 0.1, -pt.y * 0.1, -pt.z * 0.1, 0.4)
-                                recentPokes.add(PokeEvent(pt.x, pt.y, pt.z, elapsed))
-                                if (recentPokes.size > 8) recentPokes.removeAt(0)
-                                if (soundEnabled) sound.playPoke()
-                            }
-                            gesturePokeCooldown = 0.15
+                        if (soundEnabled && fingerContactCount > 0 && squishSoundCooldown <= 0.0) {
+                            sound.playPoke()
+                            squishSoundCooldown = 0.08
                         }
                     }
                     HandGesture.VICTORY -> {
@@ -578,32 +636,29 @@ fun main() {
                     }
                     HandGesture.PUNCH -> {
                         if (gestureEngine.shouldPunch()) {
-                            deformController.applyPunch(
-                                -gestureEngine.handDeltaX * 20.0,
-                                -gestureEngine.handDeltaY * 20.0
-                            )
-                            waveSystem.excite(-gestureEngine.handDeltaX, -gestureEngine.handDeltaY, -0.3, 2.0)
-                            if (soundEnabled) sound.playPunch()
+                            deformController.applyExplode()
+                            waveSystem.excite(0.5, 0.8, 0.3, 3.0)
+                            if (soundEnabled) sound.playExplode()
                         }
                     }
                     HandGesture.PINCH -> {
                         // Continuous pinch deformation — thumb+index pinching the ball
-                        if (gesturePokeCooldown <= 0.0 && gestureEngine.pinchAmount > 0.3) {
+                        if (gesturePokeCooldown <= 0.0 && gestureEngine.pinchAmount > 0.2) {
                             val (ndcX, ndcY) = gestureEngine.getFingerNDC()
                             mouseVec.set(ndcX, ndcY)
                             raycaster.setFromCamera(mouseVec, camera)
                             val intersects = raycaster.intersectObject(blob)
                             if (intersects.isNotEmpty()) {
                                 val pt = intersects[0].point as Vector3
-                                deformController.applyPinch(pt, gestureEngine.pinchAmount)
+                                deformController.applyPinch(pt, gestureEngine.pinchAmount, radius = 0.8)
                                 recentPokes.add(PokeEvent(pt.x, pt.y, pt.z, elapsed))
                                 if (recentPokes.size > 8) recentPokes.removeAt(0)
                             }
                             if (soundEnabled && squishSoundCooldown <= 0.0) {
                                 sound.playPinch(gestureEngine.pinchAmount)
-                                squishSoundCooldown = 0.1
+                                squishSoundCooldown = 0.08
                             }
-                            gesturePokeCooldown = 0.08
+                            gesturePokeCooldown = 0.05
                         }
                     }
                     HandGesture.PULL -> {
@@ -635,6 +690,23 @@ fun main() {
                             )
                             waveSystem.excite(-gestureEngine.handDeltaX, -gestureEngine.handDeltaY, -0.3, 1.5)
                             if (soundEnabled) sound.playSlap()
+                        }
+                    }
+                    HandGesture.SLICE -> {
+                        // Karate chop slice — cuts the ball in two along the hand's movement direction
+                        if (gestureEngine.shouldSlice()) {
+                            // Slice plane normal is perpendicular to hand movement direction
+                            // Hand moves in X/Y, so the slice plane normal is rotated 90 degrees
+                            val dx = -gestureEngine.handDeltaX
+                            val dy = -gestureEngine.handDeltaY
+                            val dLen = sqrt(dx * dx + dy * dy)
+                            // Normal perpendicular to movement: rotate 90 degrees
+                            val nx = if (dLen > 0.001) -dy / dLen else 1.0
+                            val ny = if (dLen > 0.001) dx / dLen else 0.0
+                            val nz = 0.0
+                            deformController.applySlice(nx, ny, nz)
+                            waveSystem.excite(nx * 0.5, ny * 0.5, 0.0, 2.0)
+                            if (soundEnabled) sound.playSlice()
                         }
                     }
                     HandGesture.KNEAD -> {
@@ -678,16 +750,12 @@ fun main() {
         }
 
         // Rotation (mouse + gesture)
+        // When hand is detected, freeze rotation so the ball is easy to sculpt
+        val handActive = gestureEngine.enabled && gestureEngine.handDetected
         val (rotX, rotY) = inputHandler.updateRotationInertia(dt)
         if (rotX != 0.0 || rotY != 0.0) {
             blob.rotation.x += rotX; blob.rotation.y += rotY
-        } else if (gestureEngine.enabled && gestureEngine.handDetected &&
-                   gestureEngine.currentGesture == HandGesture.NONE) {
-            // Hand visible but no gesture → use hand movement for rotation
-            val (gRotX, gRotY) = gestureEngine.getRotationDelta()
-            blob.rotation.x += gRotX
-            blob.rotation.y += gRotY
-        } else if (!inputHandler.isMouseDown) {
+        } else if (!handActive && !inputHandler.isMouseDown) {
             blob.rotation.y += if (currentSection == "calm") 0.0006 else 0.0015
         }
 
@@ -757,6 +825,9 @@ fun main() {
         }
         if (springPhysics.maxVelocity > 10.0) {
             springPhysics.maxVelocity = (springPhysics.maxVelocity - dt * 7.0).coerceAtLeast(10.0)
+        }
+        if (springPhysics.volumePreservation < 0.7) {
+            springPhysics.volumePreservation = (springPhysics.volumePreservation + dt * 0.3).coerceAtMost(0.7)
         }
 
         if (soundEnabled) sound.updateDrone(springPhysics.totalEnergy.coerceAtMost(2.0) / 2.0)

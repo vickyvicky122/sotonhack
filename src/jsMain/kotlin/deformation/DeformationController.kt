@@ -133,6 +133,7 @@ class DeformationController(private val spring: SpringPhysics) {
     fun applyExplode() {
         spring.maxOffset = 3.0
         spring.maxVelocity = 15.0
+        spring.volumePreservation = 0.1  // let it fly apart
         val strength = 2.5
         for (i in 0 until vertexCount) {
             val ox = spring.getOriginalX(i)
@@ -158,6 +159,7 @@ class DeformationController(private val spring: SpringPhysics) {
     fun applyScramble() {
         spring.maxOffset = 2.5
         spring.maxVelocity = 12.0
+        spring.volumePreservation = 0.1  // let it go wild
         for (i in 0 until vertexCount) {
             val rx = (kotlin.random.Random.nextDouble() - 0.5) * 3.0
             val ry = (kotlin.random.Random.nextDouble() - 0.5) * 3.0
@@ -361,9 +363,50 @@ class DeformationController(private val spring: SpringPhysics) {
         }
     }
 
+    /** Slice — karate chop splits the ball into two visual halves along a cutting plane.
+     *  Vertices on each side get pushed apart, then spring back together. */
+    fun applySlice(planeNormalX: Double, planeNormalY: Double, planeNormalZ: Double, planeOffset: Double = 0.0) {
+        spring.maxOffset = 2.5
+        spring.maxVelocity = 12.0
+        spring.volumePreservation = 0.3  // let the halves separate visually
+        val strength = 1.8
+
+        // Normalize the plane normal
+        val nLen = sqrt(planeNormalX * planeNormalX + planeNormalY * planeNormalY + planeNormalZ * planeNormalZ)
+        val nnx = if (nLen > 0.001) planeNormalX / nLen else 1.0
+        val nny = if (nLen > 0.001) planeNormalY / nLen else 0.0
+        val nnz = if (nLen > 0.001) planeNormalZ / nLen else 0.0
+
+        for (i in 0 until vertexCount) {
+            val ox = spring.getOriginalX(i)
+            val oy = spring.getOriginalY(i)
+            val oz = spring.getOriginalZ(i)
+
+            // Signed distance from vertex to the cutting plane
+            val dist = ox * nnx + oy * nny + oz * nnz - planeOffset
+
+            // Push each side away from the plane — farther vertices get pushed less (tapered)
+            val side = if (dist >= 0.0) 1.0 else -1.0
+            // Falloff: vertices near the plane get the most displacement, edges get less
+            val absDist = kotlin.math.abs(dist)
+            val falloff = exp(-absDist * absDist * 0.3) // Gaussian-like: strong near plane, fades at edges
+            val push = strength * side * falloff
+
+            spring.targetOffsets[i * 3] = (spring.targetOffsets[i * 3] + (push * nnx).toFloat())
+            spring.targetOffsets[i * 3 + 1] = (spring.targetOffsets[i * 3 + 1] + (push * nny).toFloat())
+            spring.targetOffsets[i * 3 + 2] = (spring.targetOffsets[i * 3 + 2] + (push * nnz).toFloat())
+
+            // Velocity kick for immediate visual pop
+            spring.velocities[i * 3] = (spring.velocities[i * 3] + (push * nnx * 2.5).toFloat())
+            spring.velocities[i * 3 + 1] = (spring.velocities[i * 3 + 1] + (push * nny * 2.5).toFloat())
+            spring.velocities[i * 3 + 2] = (spring.velocities[i * 3 + 2] + (push * nnz * 2.5).toFloat())
+        }
+    }
+
     fun reset() {
         spring.reset()
-        spring.maxOffset = 2.0
+        spring.maxOffset = 2.5
         spring.maxVelocity = 10.0
+        spring.volumePreservation = 0.7
     }
 }

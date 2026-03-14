@@ -18,6 +18,7 @@ enum class HandGesture(val label: String) {
     PINCH("Pinch"),
     PULL("Pull"),
     SLAP("Slap!"),
+    SLICE("Slice!"),
     KNEAD("Knead"),
     TWO_HAND_RESIZE("Resize")
 }
@@ -118,7 +119,7 @@ class GestureEngine {
     // Gesture smoothing
     private var rawGesture = HandGesture.NONE
     private var gestureFrames = 0
-    private val confirmFrames = 3
+    private val confirmFrames = 2  // faster response to gesture changes
 
     // One-shot action debounce
     private var resetCooldown = 0.0
@@ -127,6 +128,7 @@ class GestureEngine {
     private var scrambleCooldown = 0.0
     private var punchCooldown = 0.0
     private var slapCooldown = 0.0
+    private var sliceCooldown = 0.0
     private var pullCooldown = 0.0
 
     // History for velocity smoothing
@@ -173,6 +175,7 @@ class GestureEngine {
         scrambleCooldown = (scrambleCooldown - dt).coerceAtLeast(0.0)
         punchCooldown = (punchCooldown - dt).coerceAtLeast(0.0)
         slapCooldown = (slapCooldown - dt).coerceAtLeast(0.0)
+        sliceCooldown = (sliceCooldown - dt).coerceAtLeast(0.0)
         pullCooldown = (pullCooldown - dt).coerceAtLeast(0.0)
 
         val detected: Boolean = js("window._handDetected === true") as Boolean
@@ -195,11 +198,16 @@ class GestureEngine {
         handDetected = true
         val lm: dynamic = js("window._handLandmarks")
         if (lm == null) return
+        // Guard: landmarks might be an empty array or have missing entries
+        val lmValid: Boolean = js("lm != null && lm.length >= 21 && lm[0] != null") as Boolean
+        if (!lmValid) return
 
-        // Read second hand
+        // Read second hand (with guard)
         val h2detected: Boolean = js("window._hand2Detected === true") as Boolean
-        hand2Detected = h2detected
-        val lm2: dynamic = if (h2detected) js("window._hand2Landmarks") else null
+        val lm2Raw: dynamic = if (h2detected) js("window._hand2Landmarks") else null
+        val lm2Valid: Boolean = if (lm2Raw != null) js("lm2Raw != null && lm2Raw.length >= 21 && lm2Raw[0] != null") as Boolean else false
+        hand2Detected = h2detected && lm2Valid
+        val lm2: dynamic = if (lm2Valid) lm2Raw else null
 
         // Update hand position (wrist = landmark 0)
         prevHandX = handX
@@ -288,7 +296,28 @@ class GestureEngine {
             }
         }
 
-        // Upgrade open palm → slap when hand is moving very fast sideways
+        // Upgrade open palm → slice when hand is edge-on (karate chop) AND moving fast laterally
+        // Edge-on detection: fingertips have similar Y coordinates (hand rotated sideways)
+        if (currentGesture == HandGesture.OPEN && handVelocity > 0.03) {
+            val h = hand3D
+            if (h != null && h.fingers.size >= 5) {
+                // Check if fingertips (index, middle, ring, pinky) are roughly at the same Y level
+                // meaning the hand is turned sideways like a karate chop
+                val tipYs = listOf(h.fingers[1].y, h.fingers[2].y, h.fingers[3].y, h.fingers[4].y)
+                val minTipY = tipYs.min()
+                val maxTipY = tipYs.max()
+                val tipYSpread = maxTipY - minTipY
+                // If the Y spread of non-thumb fingertips is small, hand is edge-on
+                // Also check that lateral (X) velocity dominates
+                val lateralVel = abs(handDeltaX)
+                val verticalVel = abs(handDeltaY)
+                if (tipYSpread < 0.08 && lateralVel > verticalVel * 0.6) {
+                    currentGesture = HandGesture.SLICE
+                }
+            }
+        }
+
+        // Upgrade open palm → slap when hand is moving very fast sideways (only if not already SLICE)
         if (currentGesture == HandGesture.OPEN) {
             if (handVelocity > 0.04) {
                 currentGesture = HandGesture.SLAP
@@ -413,6 +442,14 @@ class GestureEngine {
         return false
     }
 
+    fun shouldSlice(): Boolean {
+        if (currentGesture == HandGesture.SLICE && sliceCooldown <= 0.0) {
+            sliceCooldown = 2.0
+            return true
+        }
+        return false
+    }
+
     fun shouldPull(): Boolean {
         if (currentGesture == HandGesture.PULL && pullCooldown <= 0.0) {
             pullCooldown = 0.3
@@ -425,6 +462,14 @@ class GestureEngine {
     fun getFingerNDC(): Pair<Double, Double> {
         val ndcX = 1.0 - 2.0 * fingerTipX
         val ndcY = 1.0 - 2.0 * fingerTipY
+        return Pair(ndcX, ndcY)
+    }
+
+    /** Convert palm center to NDC for contact-based deformation */
+    fun getPalmNDC(): Pair<Double, Double> {
+        val h = hand3D ?: return Pair(0.0, 0.0)
+        val ndcX = 1.0 - 2.0 * h.palmCenterX
+        val ndcY = 1.0 - 2.0 * h.palmCenterY
         return Pair(ndcX, ndcY)
     }
 
@@ -469,8 +514,8 @@ class GestureEngine {
             okDist < 0.06 && depthDelta < -0.003 -> HandGesture.PULL
             // OK sign: thumb+index touching, at least one other finger extended
             okDist < 0.06 && (middleUp || ringUp || pinkyUp) -> HandGesture.OK
-            // Spread / jazz hands: ALL 5 fingers including thumb → explode
-            thumbUp && indexUp && middleUp && ringUp && pinkyUp -> HandGesture.SPREAD
+            // Spread / jazz hands: ALL 5 fingers including thumb AND spread apart → explode
+            thumbUp && indexUp && middleUp && ringUp && pinkyUp && areFingersSpread(lm) -> HandGesture.SPREAD
             // Horns / rock sign: index + pinky only → scramble
             indexUp && !middleUp && !ringUp && pinkyUp -> HandGesture.HORNS
             // Victory: index + middle extended, ring + pinky closed
@@ -481,8 +526,8 @@ class GestureEngine {
             indexUp && !middleUp && !ringUp && !pinkyUp -> HandGesture.POINTER
             // Knead: 3 fingers (index+middle+ring) curled, doing a squeezing motion with palm visible
             !thumbUp && !indexUp && !middleUp && ringUp && pinkyUp -> HandGesture.KNEAD
-            // Open palm: 4 fingers extended, thumb not (distinguishes from spread)
-            !thumbUp && indexUp && middleUp && ringUp && pinkyUp -> HandGesture.OPEN
+            // Open palm: 4+ fingers extended (thumb optional if not spread)
+            indexUp && middleUp && ringUp && pinkyUp -> HandGesture.OPEN
             // Closed fist: no fingers extended (upgraded to PUNCH in update if moving fast)
             !thumbUp && !indexUp && !middleUp && !ringUp && !pinkyUp -> HandGesture.CLOSE
             else -> HandGesture.NONE
@@ -499,6 +544,28 @@ class GestureEngine {
     private fun isFingerExtended(lm: dynamic, pip: Int, tip: Int): Boolean {
         val tipY = lm[tip].y as Double
         val pipY = lm[pip].y as Double
-        return tipY < pipY - 0.02
+        // Also check against MCP (pip - 1) for more robust detection
+        val mcpY = lm[pip - 1].y as Double
+        // Finger is extended if tip is clearly above PIP joint
+        // Use relative threshold based on hand size for scale independence
+        return tipY < pipY - 0.015 && tipY < mcpY
+    }
+
+    /** Check if fingertips are spread apart (not just extended) — prevents accidental explosion */
+    private fun areFingersSpread(lm: dynamic): Boolean {
+        val tips = intArrayOf(4, 8, 12, 16, 20)
+        var totalDist = 0.0
+        var count = 0
+        for (i in tips.indices) {
+            for (j in i + 1 until tips.size) {
+                val x1 = lm[tips[i]].x as Double
+                val y1 = lm[tips[i]].y as Double
+                val x2 = lm[tips[j]].x as Double
+                val y2 = lm[tips[j]].y as Double
+                totalDist += hypot(x1 - x2, y1 - y2)
+                count++
+            }
+        }
+        return totalDist / count > 0.12
     }
 }

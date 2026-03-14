@@ -14,23 +14,162 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
-    <!-- Gesture bridge: MediaPipe init/stop + hand skeleton drawing -->
+    <!-- Gesture bridge + live finger overlay -->
     <script>
     window._handDetected = false;
     window._handLandmarks = null;
     window._gestureActive = false;
-    // Two-hand support
     window._handCount = 0;
     window._hand2Detected = false;
     window._hand2Landmarks = null;
     window._cameraPreviewOn = false;
     window._previewFrameCount = 0;
 
+    // ============================================================
+    //  Finger overlay system — pure JS, creates/positions HTML dots
+    // ============================================================
+    var _fingerDots = [];      // [{el, created}]
+    var _connLines = [];
+    var _overlayCreated = false;
+
+    function _ensureOverlay() {
+        if (_overlayCreated) return;
+        _overlayCreated = true;
+
+        // Tip indices in MediaPipe landmarks: thumb=4, index=8, middle=12, ring=16, pinky=20
+        // We create: 2 hands x (5 fingertip dots + 1 palm dot) + connection lines
+        var tipColors = [
+            ['rgba(0,200,255,0.9)', 'rgba(0,200,255,0.4)'],   // thumb — cyan
+            ['rgba(255,0,136,0.9)', 'rgba(255,0,136,0.4)'],   // index — pink
+            ['rgba(255,0,136,0.9)', 'rgba(255,0,136,0.4)'],   // middle
+            ['rgba(255,0,136,0.9)', 'rgba(255,0,136,0.4)'],   // ring
+            ['rgba(255,0,136,0.9)', 'rgba(255,0,136,0.4)']    // pinky
+        ];
+        var hand2Color = ['rgba(255,136,0,0.9)', 'rgba(255,136,0,0.4)'];
+
+        for (var h = 0; h < 2; h++) {
+            // 5 fingertip dots
+            for (var f = 0; f < 5; f++) {
+                var dot = document.createElement('div');
+                dot.style.cssText = 'position:fixed;width:18px;height:18px;border-radius:50%;pointer-events:none;z-index:60;display:none;transform:translate(-50%,-50%);';
+                var col = h === 0 ? tipColors[f] : [hand2Color[0], hand2Color[1]];
+                dot.style.background = col[0];
+                dot.style.boxShadow = '0 0 12px 4px ' + col[1] + ', 0 0 24px 8px ' + col[1].replace('0.4','0.15');
+                document.body.appendChild(dot);
+                _fingerDots.push(dot);
+            }
+            // 1 palm dot
+            var palm = document.createElement('div');
+            palm.style.cssText = 'position:fixed;width:40px;height:40px;border-radius:50%;pointer-events:none;z-index:59;display:none;transform:translate(-50%,-50%);';
+            palm.style.background = h === 0 ? 'rgba(0,255,136,0.12)' : 'rgba(255,136,0,0.12)';
+            palm.style.border = '2px solid ' + (h === 0 ? 'rgba(0,255,136,0.4)' : 'rgba(255,136,0,0.4)');
+            palm.style.boxShadow = '0 0 20px 6px ' + (h === 0 ? 'rgba(0,255,136,0.1)' : 'rgba(255,136,0,0.1)');
+            document.body.appendChild(palm);
+            _fingerDots.push(palm);  // index 5 and 11
+
+            // Connection lines: 5 palm→tip + 4 wrist→mcp = 9 per hand
+            for (var c = 0; c < 9; c++) {
+                var line = document.createElement('div');
+                line.style.cssText = 'position:fixed;height:2px;pointer-events:none;z-index:58;display:none;transform-origin:0 50%;';
+                line.style.background = h === 0 ? 'rgba(0,255,136,0.25)' : 'rgba(255,136,0,0.25)';
+                document.body.appendChild(line);
+                _connLines.push(line);
+            }
+        }
+    }
+
+    function _posLine(el, x1, y1, x2, y2) {
+        var dx = x2 - x1, dy = y2 - y1;
+        var len = Math.sqrt(dx*dx + dy*dy);
+        var angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        el.style.display = '';
+        el.style.left = x1 + 'px';
+        el.style.top = y1 + 'px';
+        el.style.width = len + 'px';
+        el.style.transform = 'rotate(' + angle + 'deg)';
+    }
+
+    function _updateFingerOverlay(results) {
+        _ensureOverlay();
+        var w = window.innerWidth;
+        var h = window.innerHeight;
+        var tips = [4, 8, 12, 16, 20];
+        var palmIdx = [0, 5, 9, 13, 17];
+        var mcpIdx = [5, 9, 13, 17];
+
+        var hands = results.multiHandLandmarks || [];
+
+        for (var hi = 0; hi < 2; hi++) {
+            var dotBase = hi * 6;   // 5 tips + 1 palm = 6 per hand
+            var lineBase = hi * 9;  // 9 lines per hand
+            var lm = hands[hi];
+
+            if (!lm || !lm.length || lm.length < 21 || !lm[0]) {
+                // Hide this hand's dots + lines
+                for (var i = 0; i < 6; i++) _fingerDots[dotBase + i].style.display = 'none';
+                for (var i = 0; i < 9; i++) _connLines[lineBase + i].style.display = 'none';
+                continue;
+            }
+
+            // Position fingertip dots (mirrored X for natural feel)
+            for (var f = 0; f < 5; f++) {
+                var pt = lm[tips[f]];
+                var sx = (1.0 - pt.x) * w;
+                var sy = pt.y * h;
+                var dot = _fingerDots[dotBase + f];
+                dot.style.display = '';
+                dot.style.left = sx + 'px';
+                dot.style.top = sy + 'px';
+            }
+
+            // Palm center
+            var pcx = 0, pcy = 0;
+            for (var p = 0; p < palmIdx.length; p++) {
+                pcx += lm[palmIdx[p]].x;
+                pcy += lm[palmIdx[p]].y;
+            }
+            pcx /= palmIdx.length;
+            pcy /= palmIdx.length;
+            var palmSx = (1.0 - pcx) * w;
+            var palmSy = pcy * h;
+            var palmDot = _fingerDots[dotBase + 5];
+            palmDot.style.display = '';
+            palmDot.style.left = palmSx + 'px';
+            palmDot.style.top = palmSy + 'px';
+
+            // Lines: palm → each fingertip (5 lines)
+            for (var f = 0; f < 5; f++) {
+                var pt = lm[tips[f]];
+                var sx = (1.0 - pt.x) * w;
+                var sy = pt.y * h;
+                _posLine(_connLines[lineBase + f], palmSx, palmSy, sx, sy);
+            }
+
+            // Lines: wrist → each MCP (4 lines)
+            var wsx = (1.0 - lm[0].x) * w;
+            var wsy = lm[0].y * h;
+            for (var m = 0; m < 4; m++) {
+                var mpt = lm[mcpIdx[m]];
+                var msx = (1.0 - mpt.x) * w;
+                var msy = mpt.y * h;
+                _posLine(_connLines[lineBase + 5 + m], wsx, wsy, msx, msy);
+            }
+        }
+    }
+
+    function _hideFingerOverlay() {
+        if (!_overlayCreated) return;
+        for (var i = 0; i < _fingerDots.length; i++) _fingerDots[i].style.display = 'none';
+        for (var i = 0; i < _connLines.length; i++) _connLines[i].style.display = 'none';
+    }
+
+    // ============================================================
+    //  Gesture init / stop
+    // ============================================================
     window.initGesture = function() {
         if (window._gestureActive) return;
         window._gestureActive = true;
 
-        // Hidden video element (feeds MediaPipe)
         var video = document.getElementById('gestureVideo');
         if (!video) {
             video = document.createElement('video');
@@ -41,20 +180,6 @@
             document.body.appendChild(video);
         }
 
-        // Canvas for hand skeleton overlay (visible)
-        var canvas = document.getElementById('gestureCanvas');
-        if (!canvas) {
-            canvas = document.createElement('canvas');
-            canvas.id = 'gestureCanvas';
-            canvas.className = 'gesture-canvas';
-            canvas.width = 160;
-            canvas.height = 120;
-            document.body.appendChild(canvas);
-        }
-        canvas.style.display = '';
-        var ctx = canvas.getContext('2d');
-
-        // Gesture label
         var label = document.getElementById('gestureLabel');
         if (!label) {
             label = document.createElement('div');
@@ -65,7 +190,6 @@
         }
         label.style.display = '';
 
-        // Initialize MediaPipe Hands (2 hands for resize/pull gestures)
         var hands = new Hands({
             locateFile: function(file) {
                 return 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/' + file;
@@ -73,17 +197,16 @@
         });
         hands.setOptions({
             maxNumHands: 2,
-            modelComplexity: 0,
-            minDetectionConfidence: 0.65,
-            minTrackingConfidence: 0.45
+            modelComplexity: 1,
+            minDetectionConfidence: 0.55,
+            minTrackingConfidence: 0.4
         });
         hands.onResults(function(results) {
-            // Store landmarks for Kotlin to read (primary hand)
+            // Store landmarks for Kotlin gesture engine
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 window._handDetected = true;
                 window._handLandmarks = results.multiHandLandmarks[0];
                 window._handCount = results.multiHandLandmarks.length;
-                // Second hand support
                 if (results.multiHandLandmarks.length > 1) {
                     window._hand2Detected = true;
                     window._hand2Landmarks = results.multiHandLandmarks[1];
@@ -99,76 +222,54 @@
                 window._hand2Landmarks = null;
             }
 
-            // Draw webcam frame + hand skeleton on canvas
-            ctx.save();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (results.image) {
-                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-            }
-            if (results.multiHandLandmarks) {
-                var colors = ['#00FF88', '#FF8800'];
-                var dotColors = ['#FF0088', '#0088FF'];
-                for (var i = 0; i < results.multiHandLandmarks.length; i++) {
-                    var hand = results.multiHandLandmarks[i];
-                    if (typeof drawConnectors !== 'undefined') {
-                        drawConnectors(ctx, hand, HAND_CONNECTIONS,
-                            {color: colors[i] || colors[0], lineWidth: 2});
-                    }
-                    if (typeof drawLandmarks !== 'undefined') {
-                        drawLandmarks(ctx, hand,
-                            {color: dotColors[i] || dotColors[0], lineWidth: 1, radius: 3});
-                    }
-                }
-            }
-            ctx.restore();
+            // *** Live finger overlay — rendered right here in pure JS ***
+            _updateFingerOverlay(results);
 
-            // Draw to camera preview canvas if enabled (every 3rd frame)
+            // Camera preview canvas (small, bottom-right)
             if (window._cameraPreviewOn) {
                 window._previewFrameCount = (window._previewFrameCount || 0) + 1;
                 if (window._previewFrameCount % 3 === 0) {
-                var preview = document.getElementById('cameraPreview');
-                if (preview) {
-                    var pCtx = preview.getContext('2d');
-                    pCtx.save();
-                    pCtx.clearRect(0, 0, preview.width, preview.height);
-                    if (results.image) {
-                        pCtx.drawImage(results.image, 0, 0, preview.width, preview.height);
-                    }
-                    if (results.multiHandLandmarks) {
-                        var previewColors = ['#00FF88', '#FF8800'];
-                        var previewDots = ['#FF0088', '#0088FF'];
-                        for (var j = 0; j < results.multiHandLandmarks.length; j++) {
-                            var h = results.multiHandLandmarks[j];
-                            if (typeof drawConnectors !== 'undefined') {
-                                drawConnectors(pCtx, h, HAND_CONNECTIONS,
-                                    {color: previewColors[j] || previewColors[0], lineWidth: 3});
-                            }
-                            if (typeof drawLandmarks !== 'undefined') {
-                                drawLandmarks(pCtx, h,
-                                    {color: previewDots[j] || previewDots[0], lineWidth: 1, radius: 4});
+                    var preview = document.getElementById('cameraPreview');
+                    if (preview) {
+                        var pCtx = preview.getContext('2d');
+                        pCtx.save();
+                        pCtx.clearRect(0, 0, preview.width, preview.height);
+                        if (results.image) {
+                            pCtx.drawImage(results.image, 0, 0, preview.width, preview.height);
+                        }
+                        if (results.multiHandLandmarks) {
+                            var previewColors = ['#00FF88', '#FF8800'];
+                            var previewDots = ['#FF0088', '#0088FF'];
+                            for (var j = 0; j < results.multiHandLandmarks.length; j++) {
+                                var hh = results.multiHandLandmarks[j];
+                                if (typeof drawConnectors !== 'undefined') {
+                                    drawConnectors(pCtx, hh, HAND_CONNECTIONS,
+                                        {color: previewColors[j] || previewColors[0], lineWidth: 3});
+                                }
+                                if (typeof drawLandmarks !== 'undefined') {
+                                    drawLandmarks(pCtx, hh,
+                                        {color: previewDots[j] || previewDots[0], lineWidth: 1, radius: 4});
+                                }
                             }
                         }
+                        pCtx.font = '13px Inter, sans-serif';
+                        pCtx.fillStyle = window._handDetected ? '#00FF88' : '#FF4466';
+                        pCtx.fillText(window._handDetected ? (window._handCount + ' hand(s) detected') : 'No hand detected', 12, 22);
+                        pCtx.restore();
                     }
-                    // Status text
-                    pCtx.font = '13px Inter, sans-serif';
-                    pCtx.fillStyle = window._handDetected ? '#00FF88' : '#FF4466';
-                    pCtx.fillText(window._handDetected ? (window._handCount + ' hand(s) detected') : 'No hand detected', 12, 22);
-                    pCtx.restore();
-                }
                 }
             }
         });
         window._handsInstance = hands;
 
-        // Camera utility: feeds video frames to MediaPipe
         var camera = new Camera(video, {
             onFrame: async function() {
                 if (window._handsInstance && window._gestureActive) {
                     await window._handsInstance.send({image: video});
                 }
             },
-            width: 240,
-            height: 180
+            width: 640,
+            height: 480
         });
         camera.start();
         window._cameraInstance = camera;
@@ -188,20 +289,14 @@
         }
         window._handsInstance = null;
 
-        // Stop webcam stream
         var video = document.getElementById('gestureVideo');
         if (video && video.srcObject) {
             video.srcObject.getTracks().forEach(function(t) { t.stop(); });
             video.srcObject = null;
         }
 
-        // Hide canvas + label
-        var canvas = document.getElementById('gestureCanvas');
-        if (canvas) {
-            canvas.style.display = 'none';
-            var ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
+        // Hide overlay + label
+        _hideFingerOverlay();
         var label = document.getElementById('gestureLabel');
         if (label) label.style.display = 'none';
     };

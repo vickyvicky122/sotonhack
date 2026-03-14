@@ -440,27 +440,62 @@ body.scale-xl .calm-subtext { font-size: 15px; }
 /* ======= Gesture Recognition ======= */
 .gesture-canvas {
     position: fixed;
-    bottom: 20px;
-    left: 20px;
-    width: 180px;
-    height: 135px;
-    border-radius: 12px;
-    border: 1px solid var(--ctrl-border);
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
     transform: scaleX(-1);
-    z-index: 50;
-    background: rgba(0, 0, 0, 0.25);
-    box-shadow: var(--shadow-lg);
+    z-index: 5;
+    background: transparent;
     display: none;
-    opacity: 0.85;
+    pointer-events: none;
+}
+
+/* Live finger tracking dots */
+.finger-dot {
+    position: fixed;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(255, 0, 136, 0.85);
+    box-shadow: 0 0 12px 4px rgba(255, 0, 136, 0.4), 0 0 24px 8px rgba(255, 0, 136, 0.15);
+    pointer-events: none;
+    z-index: 60;
+    display: none;
+    transform: translate(-50%, -50%);
+    transition: left 0.04s linear, top 0.04s linear;
+}
+.finger-dot.thumb {
+    background: rgba(0, 200, 255, 0.85);
+    box-shadow: 0 0 12px 4px rgba(0, 200, 255, 0.4), 0 0 24px 8px rgba(0, 200, 255, 0.15);
+}
+.finger-dot.palm {
+    width: 40px;
+    height: 40px;
+    background: rgba(0, 255, 136, 0.15);
+    border: 2px solid rgba(0, 255, 136, 0.4);
+    box-shadow: 0 0 20px 6px rgba(0, 255, 136, 0.1);
+}
+.finger-dot.hand2 {
+    background: rgba(255, 136, 0, 0.85);
+    box-shadow: 0 0 12px 4px rgba(255, 136, 0, 0.4), 0 0 24px 8px rgba(255, 136, 0, 0.15);
+}
+.finger-conn {
+    position: fixed;
+    height: 2px;
+    background: rgba(0, 255, 136, 0.3);
+    pointer-events: none;
+    z-index: 59;
+    display: none;
+    transform-origin: 0 50%;
 }
 
 .gesture-label {
     position: fixed;
-    bottom: 162px;
+    top: 20px;
     left: 20px;
-    width: 180px;
     text-align: center;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 500;
     letter-spacing: 0.8px;
     text-transform: uppercase;
@@ -469,11 +504,11 @@ body.scale-xl .calm-subtext { font-size: 15px; }
     backdrop-filter: blur(16px) saturate(1.4);
     -webkit-backdrop-filter: blur(16px) saturate(1.4);
     border: 1px solid var(--ctrl-border);
-    border-radius: 8px;
-    padding: 5px 10px;
+    border-radius: 10px;
+    padding: 8px 16px;
     z-index: 50;
     display: none;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
 }
 
 /* Camera preview — larger hand tracking view */

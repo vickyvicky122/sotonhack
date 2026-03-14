@@ -25,12 +25,15 @@ external class Vector3(x: Double = definedExternally, y: Double = definedExterna
     var y: Double
     var z: Double
     fun set(x: Double, y: Double, z: Double): Vector3
+    fun clone(): Vector3
     fun copy(v: Vector3): Vector3
+    fun add(v: Vector3): Vector3
     fun sub(v: Vector3): Vector3
     fun normalize(): Vector3
     fun multiplyScalar(s: Double): Vector3
     fun length(): Double
     fun distanceTo(v: Vector3): Double
+    fun unproject(camera: PerspectiveCamera): Vector3
 }
 
 external class Vector2(x: Double = definedExternally, y: Double = definedExternally) {

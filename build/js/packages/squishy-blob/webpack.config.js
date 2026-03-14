@@ -13,7 +13,7 @@ let config = {
 
 // entry
 config.entry = {
-    main: [require('path').resolve(__dirname, "kotlin/squishy-blob.js")]
+    main: [require('path').resolve(__dirname, "kotlin\\squishy-blob.js")]
 };
 config.output = {
     filename: (chunkData) => {
@@ -25,7 +25,6 @@ config.output = {
     libraryTarget: "umd",
     globalObject: "this"
 };
-config.output.path = require('path').resolve(__dirname, "../../../dist/js/developmentExecutable")
     // source maps
     config.module.rules.push({
             test: /\.js$/,
@@ -35,6 +34,21 @@ config.output.path = require('path').resolve(__dirname, "../../../dist/js/develo
     config.devtool = 'eval-source-map';
 config.ignoreWarnings = [/Failed to parse source map/]
     
+// dev server
+config.devServer = {
+  "open": true,
+  "static": [
+    "kotlin",
+    "..\\..\\..\\processedResources\\js\\main"
+  ],
+  "client": {
+    "overlay": {
+      "errors": true,
+      "warnings": false
+    }
+  }
+};
+
 // Report progress to console
 // noinspection JSUnnecessarySemicolon
 ;(function(config) {
@@ -42,7 +56,7 @@ config.ignoreWarnings = [/Failed to parse source map/]
     const handler = (percentage, message, ...args) => {
         const p = percentage * 100;
         let msg = `${Math.trunc(p / 10)}${Math.trunc(p % 10)}% ${message} ${args.join(' ')}`;
-        msg = msg.replace(require('path').resolve(__dirname, "../.."), '');;
+        msg = msg.replace(require('path').resolve(__dirname, "..\\.."), '');;
         console.log(msg);
     };
 

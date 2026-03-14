@@ -1,0 +1,52 @@
+# ============================================================
+#  Gradle
+# ============================================================
+.gradle/
+build/
+
+# Keep the Gradle wrapper so others can bootstrap without a local install
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+!gradlew
+!gradlew.bat
+
+# ============================================================
+#  Kotlin / JS
+# ============================================================
+# kotlin-js-store/yarn.lock IS intentionally committed —
+# it locks JS dependency versions for reproducible builds.
+# Ignore nothing inside kotlin-js-store.
+
+# ============================================================
+#  IntelliJ IDEA / Android Studio
+# ============================================================
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# ============================================================
+#  OS-generated files
+# ============================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ============================================================
+#  Local / machine-specific config
+# ============================================================
+local.properties

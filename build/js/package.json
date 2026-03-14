@@ -3,9 +3,9 @@
   "version": "unspecified",
   "private": true,
   "workspaces": [
-    "packages/squishy-blob",
-    "packages/squishy-blob-test",
-    "packages_imported/kotlin-test-js-runner/0.0.1"
+    "packages\\squishy-blob",
+    "packages\\squishy-blob-test",
+    "packages_imported\\kotlin-test-js-runner\\0.0.1"
   ],
   "resolutions": {},
   "devDependencies": {},

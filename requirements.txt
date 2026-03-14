@@ -1,0 +1,15 @@
+# Dependencies for the sotonhack project (Kotlin/JS)
+# This project uses Gradle for build management and npm for JS dependencies.
+# Normally, running './gradlew jsBrowserDevelopmentRun' installs everything automatically.
+# If you need to install JS dependencies manually, use npm:
+# npm install three@0.160.0 format-util@^1.0.5
+#
+# System requirements to run the project:
+# - JDK (Java Development Kit, version 11 or higher)
+# - Gradle (included via gradlew)
+# - Node.js and npm (for JS dependencies)
+# - Kotlin 1.9.21 (managed by Gradle)
+#
+# JS Dependencies (from package.json):
+three==0.160.0
+format-util==1.0.5

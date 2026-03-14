@@ -116,6 +116,12 @@ class GestureEngine {
     private var prevHandX = 0.5
     private var prevHandY = 0.5
 
+    // Swipe tracking for slice detection
+    private var swipeStartX = 0.5
+    private var swipeAccumX = 0.0
+    private var swipeFrames = 0
+    private val swipeMaxFrames = 15  // ~0.25s at 60fps to complete a swipe
+
     // Gesture smoothing
     private var rawGesture = HandGesture.NONE
     private var gestureFrames = 0
@@ -296,29 +302,35 @@ class GestureEngine {
             }
         }
 
-        // Upgrade open palm → slice when hand is edge-on (karate chop) AND moving fast laterally
-        // Edge-on detection: fingertips have similar Y coordinates (hand rotated sideways)
-        if (currentGesture == HandGesture.OPEN && handVelocity > 0.03) {
-            val h = hand3D
-            if (h != null && h.fingers.size >= 5) {
-                // Check if fingertips (index, middle, ring, pinky) are roughly at the same Y level
-                // meaning the hand is turned sideways like a karate chop
-                val tipYs = listOf(h.fingers[1].y, h.fingers[2].y, h.fingers[3].y, h.fingers[4].y)
-                val minTipY = tipYs.min()
-                val maxTipY = tipYs.max()
-                val tipYSpread = maxTipY - minTipY
-                // If the Y spread of non-thumb fingertips is small, hand is edge-on
-                // Also check that lateral (X) velocity dominates
-                val lateralVel = abs(handDeltaX)
-                val verticalVel = abs(handDeltaY)
-                if (tipYSpread < 0.08 && lateralVel > verticalVel * 0.6) {
-                    currentGesture = HandGesture.SLICE
-                }
+        // Track swipes for slice detection:
+        // A slice = hand swipes across a large horizontal distance quickly
+        // while passing through the center area (where the ball is)
+        if (handVelocity > 0.015) {
+            // Hand is moving — accumulate horizontal travel
+            swipeAccumX += abs(handDeltaX)
+            swipeFrames++
+
+            // Check if we've swiped far enough, fast enough, through the center
+            val handNearCenter = handX > 0.25 && handX < 0.75 && handY > 0.2 && handY < 0.8
+            if (swipeAccumX > 0.25 && swipeFrames <= swipeMaxFrames && handNearCenter && sliceCooldown <= 0.0) {
+                currentGesture = HandGesture.SLICE
+                swipeAccumX = 0.0
+                swipeFrames = 0
             }
+
+            // Reset if taking too long (not a fast swipe)
+            if (swipeFrames > swipeMaxFrames) {
+                swipeAccumX = 0.0
+                swipeFrames = 0
+            }
+        } else {
+            // Hand stopped or moving slowly — reset swipe tracking
+            swipeAccumX = 0.0
+            swipeFrames = 0
         }
 
         // Upgrade open palm → slap when hand is moving very fast sideways (only if not already SLICE)
-        if (currentGesture == HandGesture.OPEN) {
+        if (currentGesture == HandGesture.OPEN && currentGesture != HandGesture.SLICE) {
             if (handVelocity > 0.04) {
                 currentGesture = HandGesture.SLAP
             }

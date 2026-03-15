@@ -41,6 +41,9 @@ val SCALE_LABELS = arrayOf("Normal", "Large", "Extra Large")
 
 // Reordered: calm jelly is the recommended default
 val STYLE_NAMES = arrayOf("Water Balloon", "Gel Ball", "Crystal Drop", "Soap Bubble")
+private const val CAMERA_ZOOM_MIN = 3.0
+private const val CAMERA_ZOOM_MAX = 10.0
+private const val GESTURE_ZOOM_SENSITIVITY = 16.0
 
 // Poke ripple tracking
 data class PokeEvent(val x: Double, val y: Double, val z: Double, val time: Double)
@@ -255,6 +258,11 @@ fun main() {
     var currentThemeIndex = 0
     var currentScaleIndex = 0
     var currentStyleIndex = 1
+
+    fun applyCameraZoom(zoomDelta: Double) {
+        if (zoomDelta == 0.0) return
+        camera.position.z = (camera.position.z + zoomDelta).coerceIn(CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX)
+    }
 
     fun applyBallColor() { currentColor = BALL_COLORS[currentColorIndex] }
 
@@ -559,6 +567,9 @@ fun main() {
                     return if (dist < contactThreshold) Triple(cx, cy, cz) else null
                 }
 
+                val (palmNx, palmNy) = gestureEngine.getPalmNDC()
+                val palmContact = ndcToContact(palmNx, palmNy)
+
                 // Each fingertip pushes into the ball
                 val fingerNDCs = gestureEngine.getAllFingerNDC()
                 for ((fndcX, fndcY) in fingerNDCs) {
@@ -572,8 +583,6 @@ fun main() {
                 }
 
                 // Palm also pushes — broad, soft pressure
-                val (palmNx, palmNy) = gestureEngine.getPalmNDC()
-                val palmContact = ndcToContact(palmNx, palmNy)
                 if (palmContact != null) {
                     val (px, py, pz) = palmContact
                     val palmDist = sqrt(px * px + py * py + pz * pz)
@@ -758,10 +767,9 @@ fun main() {
                         }
                     }
                     HandGesture.TWO_HAND_RESIZE -> {
-                        // Two-hand resize — spread hands apart to grow, bring together to shrink
+                        // Two-hand zoom is applied globally below so it works in every section.
                         val resizeDelta = gestureEngine.twoHandResizeDelta
                         if (kotlin.math.abs(resizeDelta) > 0.001) {
-                            deformController.applyResize(resizeDelta * 8.0, dt)
                             if (soundEnabled && squishSoundCooldown <= 0.0) {
                                 sound.playResize(resizeDelta > 0)
                                 squishSoundCooldown = 1.0
@@ -882,7 +890,15 @@ fun main() {
 
         // Scroll zoom
         val scroll = inputHandler.consumeScrollDelta()
-        if (scroll != 0.0) camera.position.z = (camera.position.z + scroll * 0.003).coerceIn(3.0, 10.0)
+        applyCameraZoom(scroll * 0.003)
+
+        // Two-hand pinch zoom: pinch with both hands, then spread apart to zoom in or together to zoom out.
+        if (gestureEngine.enabled && gestureEngine.currentGesture == HandGesture.TWO_HAND_RESIZE) {
+            val resizeDelta = gestureEngine.twoHandResizeDelta
+            if (kotlin.math.abs(resizeDelta) > 0.0008) {
+                applyCameraZoom(-resizeDelta * GESTURE_ZOOM_SENSITIVITY)
+            }
+        }
 
         // Click poke + ripple tracking
         if (currentSection == "deform") {

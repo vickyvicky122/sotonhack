@@ -69,6 +69,16 @@ body { background: #d8d4de; color: #c8c8d8; }
 }
 .pill-btn:hover { background: rgba(255,255,255,0.9); color: rgba(30,25,45,0.85); }
 .pill-btn:active { transform: scale(0.97); transition-duration: 0.06s; }
+.pill-btn-active {
+    background: rgba(196,149,76,0.9);
+    border-color: rgba(124,87,31,0.22);
+    color: rgba(52,33,7,0.92);
+}
+.pill-btn-small {
+    min-height: 28px;
+    padding: 6px 10px;
+    font-size: 9px;
+}
 
 /* ---- Navigation (right side) ---- */
 #nav {

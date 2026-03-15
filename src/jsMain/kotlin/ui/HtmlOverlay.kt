@@ -71,7 +71,7 @@ class HtmlOverlay(
 
         // -- Section: Chill (blob + breathing) --
         sectionChill = createSection("section-chill", """
-            <div class="section-hint">squish with your hands · drag to rotate · scroll to zoom</div>
+            <div class="section-hint">squish with your hands · drag to rotate · scroll or two-hand pinch to zoom</div>
             <div class="deform-controls">
                 <button class="pill-btn" id="btnReset">Reset</button>
                 <button class="pill-btn" id="btnColor">Color</button>
@@ -127,10 +127,11 @@ class HtmlOverlay(
                     <div class="gesture-item"><span class="gesture-emoji">✊</span><span class="gesture-name">Fist</span><span class="gesture-desc">Squeeze inward</span></div>
                     <div class="gesture-item"><span class="gesture-emoji">☝️</span><span class="gesture-name">Point</span><span class="gesture-desc">Poke with fingertip</span></div>
                     <div class="gesture-item"><span class="gesture-emoji">🤏</span><span class="gesture-name">Pinch</span><span class="gesture-desc">Dent like clay</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">👐</span><span class="gesture-name">Two-Hand Pinch</span><span class="gesture-desc">Pinch both hands, then spread to zoom</span></div>
                     <div class="gesture-item"><span class="gesture-emoji">👏</span><span class="gesture-name">Clap</span><span class="gesture-desc">Explode!</span></div>
                     <div class="gesture-item"><span class="gesture-emoji">🔪</span><span class="gesture-name">Fast Swipe</span><span class="gesture-desc">Slice in half</span></div>
                 </div>
-                <div class="gesture-guide-note">Just move your hand near the blob. Your fingers automatically push into the surface.</div>
+                <div class="gesture-guide-note">Move one hand near the blob to squish it. Use a pinch on both hands to enter zoom, then move them apart or together.</div>
             """.trimIndent()
         }
         document.body?.appendChild(gestureGuide!!)
@@ -147,7 +148,7 @@ class HtmlOverlay(
         // -- Section: Maths (3D graph — sidebar handles UI) --
         sectionMaths = createSection("section-maths", """
             <div class="strings-content">
-                <div class="strings-subtext">drag to rotate · scroll to zoom · E cycle · R reset · L lock · ↑↓ offset · ←→ pan</div>
+                <div class="strings-subtext">drag to rotate · scroll or two-hand pinch to zoom · E cycle · R reset · L lock · ↑↓ offset · ←→ pan</div>
             </div>
         """.trimIndent())
         document.body?.appendChild(sectionMaths!!)

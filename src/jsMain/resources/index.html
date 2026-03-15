@@ -18,10 +18,12 @@
     <script>
     window._handDetected = false;
     window._handLandmarks = null;
+    window._handWorldLandmarks = null;
     window._gestureActive = false;
     window._handCount = 0;
     window._hand2Detected = false;
     window._hand2Landmarks = null;
+    window._hand2WorldLandmarks = null;
     window._cameraPreviewOn = false;
     window._previewFrameCount = 0;
 
@@ -229,20 +231,29 @@
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 window._handDetected = true;
                 window._handLandmarks = results.multiHandLandmarks[0];
+                window._handWorldLandmarks = results.multiHandWorldLandmarks && results.multiHandWorldLandmarks.length > 0
+                    ? results.multiHandWorldLandmarks[0]
+                    : null;
                 window._handCount = results.multiHandLandmarks.length;
                 if (results.multiHandLandmarks.length > 1) {
                     window._hand2Detected = true;
                     window._hand2Landmarks = results.multiHandLandmarks[1];
+                    window._hand2WorldLandmarks = results.multiHandWorldLandmarks && results.multiHandWorldLandmarks.length > 1
+                        ? results.multiHandWorldLandmarks[1]
+                        : null;
                 } else {
                     window._hand2Detected = false;
                     window._hand2Landmarks = null;
+                    window._hand2WorldLandmarks = null;
                 }
             } else {
                 window._handDetected = false;
                 window._handLandmarks = null;
+                window._handWorldLandmarks = null;
                 window._handCount = 0;
                 window._hand2Detected = false;
                 window._hand2Landmarks = null;
+                window._hand2WorldLandmarks = null;
             }
 
             // *** Live finger overlay — rendered right here in pure JS ***
@@ -302,9 +313,11 @@
         window._gestureActive = false;
         window._handDetected = false;
         window._handLandmarks = null;
+        window._handWorldLandmarks = null;
         window._handCount = 0;
         window._hand2Detected = false;
         window._hand2Landmarks = null;
+        window._hand2WorldLandmarks = null;
 
         // Just stop the camera feed — don't destroy hands instance (WASM can't reinit)
         if (window._cameraInstance) {

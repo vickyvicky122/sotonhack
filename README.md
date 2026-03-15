@@ -1,5 +1,7 @@
 # SoftSpace — Your Calm Workspace Companion
 
+**Live demo: [sotonhack.vercel.app](https://sotonhack.vercel.app)**
+
 A browser-based anti-stress experience featuring an interactive 3D blob you can poke, squeeze, twist, and explode — with hand gesture recognition and layered ASMR sounds. Built for SotonHack.
 
 ## What It Does

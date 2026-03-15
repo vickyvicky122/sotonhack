@@ -12,7 +12,8 @@ class HtmlOverlay(
     private val onCycleScale: () -> Unit = {},
     private val onCycleStyle: () -> Unit = {},
     private val onToggleGesture: () -> Unit = {},
-    private val onResetStrings: () -> Unit = {}
+    private val onResetStrings: () -> Unit = {},
+    private val onSectionChanged: (String) -> Unit = {}
 ) {
     private var quoteEl: HTMLElement? = null
     private var soundBtn: HTMLElement? = null
@@ -233,6 +234,8 @@ class HtmlOverlay(
         if (name != "focus" && breathingActive) {
             stopBreathing()
         }
+
+        onSectionChanged(name)
     }
 
     fun getCurrentSection(): String = currentSection

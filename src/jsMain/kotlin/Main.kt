@@ -1,4 +1,5 @@
 import audio.SoundEngine
+import audio.VoiceEngine
 import deformation.DeformationController
 import deformation.SpringPhysics
 import deformation.WaveSystem
@@ -235,6 +236,7 @@ fun main() {
 
     // Sound
     val sound = SoundEngine()
+    val voice = VoiceEngine()
     var soundEnabled = true
 
     // Gesture recognition
@@ -392,6 +394,13 @@ fun main() {
         onResetStrings = {
             stringSystem.reset()
             if (soundEnabled) sound.playReset()
+        },
+        onSectionChanged = { section ->
+            when (section) {
+                "motivation" -> voice.playMotivation()
+                "calm" -> voice.playMeditation()
+                else -> voice.stop()
+            }
         }
     )
     overlayRef = overlay

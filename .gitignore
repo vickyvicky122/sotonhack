@@ -51,3 +51,5 @@ $RECYCLE.BIN/
 # ============================================================
 local.properties
 .gradle/
+.env
+.vercel

@@ -20,7 +20,7 @@ A squishy 3D blob floats on screen. You deform it with keyboard, mouse, touch, o
 | Language | **Kotlin/JS** (IR backend) via Kotlin Multiplatform |
 | 3D Engine | **Three.js r160** with custom `@JsModule` external declarations |
 | Physics | Per-vertex damped spring simulation (Hooke's law) |
-| Gesture Recognition | **MediaPipe Hands** (CDN) with heuristic classifier for 10 gestures |
+| Gesture Recognition | **MediaPipe Hands** (CDN) with heuristic classifier for 16 gestures |
 | Audio | **Web Audio API** — procedural ASMR synthesis (oscillators + filtered noise + envelopes) |
 | Build | **Gradle 8.5** + Kotlin/JS webpack bundling |
 | Styling | Glassmorphism CSS with backdrop filters, 3 themes, 3 scale modes |
@@ -50,15 +50,21 @@ No backend. No auth. Single-page app, fully client-side.
 ### Hand Gestures (webcam)
 | Gesture | Effect |
 |---------|--------|
-| Open Palm | Expand outward |
-| Fist | Squeeze inward |
+| Open Palm | Finger + palm contact pushes the surface |
+| Fist (Grip) | Continuous squeeze inward (proportional to grip tightness) |
 | Pointer | Poke at fingertip |
 | Victory | Stretch vertically |
 | OK Sign | Reset shape |
 | Thumbs Up | Cycle color |
 | Spread (jazz hands) | Explode apart |
 | Horns (rock sign) | Scramble randomly |
-| Fast fist (punch) | Directional punch |
+| Fast fist (punch) | Explosive impact |
+| Pinch (thumb + index) | Localized clay-like depression |
+| Pull (pinch + move away) | Stretch outward like taffy |
+| Slap (open palm + fast) | Broad directional impact with wobble |
+| Slice (fast horizontal swipe) | Splits the blob along a cutting plane |
+| Knead (ring + pinky extended) | Oscillating dough-like squeeze |
+| Two-Hand Resize | Spread apart to grow, together to shrink |
 
 ## Material Presets
 

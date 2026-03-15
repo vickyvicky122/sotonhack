@@ -21,7 +21,8 @@ enum class HandGesture(val label: String) {
     SLAP("Slap!"),
     SLICE("Slice!"),
     KNEAD("Knead"),
-    TWO_HAND_RESIZE("Resize")
+    TWO_HAND_RESIZE("Resize"),
+    MIDDLE_FINGER("IT WILL BE OKAY")
 }
 
 /**
@@ -596,14 +597,16 @@ class GestureEngine {
         return when {
             // Pinch: thumb+index OR thumb+middle close — very forgiving, any finger state
             anyPinchClose && okDist < 0.10 && !middleUp && !ringUp -> HandGesture.PINCH
-            // Also pinch if just thumb+index are close regardless of other fingers
-            okDist < 0.07 -> HandGesture.PINCH
+            // Also pinch if just thumb+index are close regardless of other fingers (but not middle finger)
+            okDist < 0.07 && !(!indexUp && middleUp && !ringUp && !pinkyUp) -> HandGesture.PINCH
             // Pull: pinch + hand moving away from camera
             anyPinchClose && depthDelta < -0.003 -> HandGesture.PULL
             // OK sign: thumb+index touching AND at least 2 other fingers clearly up
             okDist < 0.06 && middleUp && (ringUp || pinkyUp) -> HandGesture.OK
             // Spread / jazz hands: ALL 5 fingers including thumb AND spread apart → explode
             thumbUp && indexUp && middleUp && ringUp && pinkyUp && areFingersSpread(lm) -> HandGesture.SPREAD
+            // Middle finger: only middle extended
+            !indexUp && middleUp && !ringUp && !pinkyUp -> HandGesture.MIDDLE_FINGER
             // Horns / rock sign: index + pinky only → scramble
             indexUp && !middleUp && !ringUp && pinkyUp -> HandGesture.HORNS
             // Victory: index + middle extended, ring + pinky closed

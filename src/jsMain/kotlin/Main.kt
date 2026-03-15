@@ -256,7 +256,7 @@ fun main() {
     var currentColor = BALL_COLORS[0]
     var currentThemeIndex = 0
     var currentScaleIndex = 0
-    var currentStyleIndex = 0
+    var currentStyleIndex = 1
 
     fun applyBallColor() { currentColor = BALL_COLORS[currentColorIndex] }
 
@@ -356,13 +356,18 @@ fun main() {
         material.needsUpdate = true
     }
 
+    // Sound cooldowns
+    var squishSoundCooldown = 0.0
+    var resetSoundCooldown = 0.0
+    var pullSoundCooldown = 0.0
+
     // === UI Overlay ===
     var overlayRef: HtmlOverlay? = null
     val overlay = HtmlOverlay(
         onReset = {
             deformController.reset()
             waveSystem.reset()
-            if (soundEnabled) sound.playReset()
+            if (soundEnabled && resetSoundCooldown <= 0.0) { sound.playReset(); resetSoundCooldown = 1.0 }
         },
         onToggleSound = {
             soundEnabled = !soundEnabled
@@ -389,11 +394,10 @@ fun main() {
         },
         onResetStrings = {
             mathGraph.resetSelected()
-            if (soundEnabled) sound.playReset()
+            if (soundEnabled && resetSoundCooldown <= 0.0) { sound.playReset(); resetSoundCooldown = 1.0 }
         },
         onCycleEquation = {
             mathGraph.cycleSelectedType()
-            if (soundEnabled) sound.playClick()
         },
         onSectionChanged = { section ->
             when (section) {
@@ -408,7 +412,6 @@ fun main() {
     val mouseVec = Vector2()
     val clock = Clock()
 
-    var squishSoundCooldown = 0.0
     var quoteTimer = 0.0
     val quoteInterval = 180.0
     val quoteDisplayDuration = 10.0
@@ -445,7 +448,6 @@ fun main() {
                 waveSystem.excite(-pt.x * 0.15, -pt.y * 0.15, -pt.z * 0.15, 0.6)
                 recentPokes.add(PokeEvent(pt.x, pt.y, pt.z, clock.getElapsedTime()))
                 if (recentPokes.size > 8) recentPokes.removeAt(0)
-                if (soundEnabled) sound.playPoke()
             }
         }
     })
@@ -462,6 +464,7 @@ fun main() {
         val dt = clock.getDelta()
         val elapsed = clock.getElapsedTime()
         overlay.updateBreathing(dt)
+        overlay.updateOkayPopup(dt)
         val currentSection = overlay.getCurrentSection()
 
         // Toggle visibility: blob vs graph
@@ -500,26 +503,27 @@ fun main() {
             if (" " in inputHandler.pressedKeys) {
                 deformController.applyPulse()
                 waveSystem.excite(0.0, 0.5, 0.0, 1.0)
-                if (soundEnabled) sound.playPulse()
+                if (soundEnabled && squishSoundCooldown <= 0.0) { sound.playPulse(); squishSoundCooldown = 1.0 }
                 inputHandler.pressedKeys.remove(" ")
             }
             if ("r" in inputHandler.pressedKeys || "R" in inputHandler.pressedKeys) {
                 deformController.reset()
                 waveSystem.reset()
-                if (soundEnabled) sound.playReset()
+                if (soundEnabled && resetSoundCooldown <= 0.0) { sound.playReset(); resetSoundCooldown = 1.0 }
                 inputHandler.pressedKeys.remove("r"); inputHandler.pressedKeys.remove("R")
             }
             if ("c" in inputHandler.pressedKeys || "C" in inputHandler.pressedKeys) {
                 currentColorIndex = (currentColorIndex + 1) % BALL_COLORS.size
                 applyBallColor()
-                if (soundEnabled) sound.playClick()
-                inputHandler.pressedKeys.remove("c"); inputHandler.pressedKeys.remove("C")
+                    inputHandler.pressedKeys.remove("c"); inputHandler.pressedKeys.remove("C")
             }
             deformController.applyKeyboardDeformation(inputHandler.pressedKeys, dt)
             squishSoundCooldown -= dt
+            resetSoundCooldown -= dt
+            pullSoundCooldown -= dt
             if (soundEnabled && deformController.isDeforming() && squishSoundCooldown <= 0.0) {
                 sound.playSquish(springPhysics.totalEnergy.coerceAtMost(1.0))
-                squishSoundCooldown = 0.15
+                squishSoundCooldown = 1.0
             }
             if (!deformController.isDeforming()) {
                 // Slower decay when gesture fingers are actively touching the ball
@@ -604,7 +608,7 @@ fun main() {
                     )
                     if (soundEnabled && squishSoundCooldown <= 0.0) {
                         sound.playSquish(0.2 + fingerContactCount * 0.08)
-                        squishSoundCooldown = 0.12
+                        squishSoundCooldown = 1.0
                     }
                 }
 
@@ -618,14 +622,13 @@ fun main() {
                         deformController.applyGrip(gestureEngine.gripAmount, dt)
                         if (soundEnabled && squishSoundCooldown <= 0.0 && gestureEngine.gripAmount > 0.2) {
                             sound.playSqueeze()
-                            squishSoundCooldown = 0.12
+                            squishSoundCooldown = 1.0
                         }
                     }
                     // POINTER: finger contact handles the poke, just add sound
                     HandGesture.POINTER -> {
-                        if (soundEnabled && fingerContactCount > 0 && squishSoundCooldown <= 0.0) {
-                            sound.playPoke()
-                            squishSoundCooldown = 0.08
+                        if (fingerContactCount > 0) {
+                            squishSoundCooldown = 0.8
                         }
                     }
                     HandGesture.VICTORY -> {
@@ -634,41 +637,41 @@ fun main() {
                         deformController.applyKeyboardDeformation(gestureKeys, dt)
                         if (soundEnabled && squishSoundCooldown <= 0.0) {
                             sound.playStretch()
-                            squishSoundCooldown = 0.15
+                            squishSoundCooldown = 1.0
                         }
                     }
                     HandGesture.OK -> {
                         if (gestureEngine.shouldReset()) {
                             deformController.reset()
                             waveSystem.reset()
-                            if (soundEnabled) sound.playReset()
+                            if (soundEnabled && resetSoundCooldown <= 0.0) { sound.playReset(); resetSoundCooldown = 1.0 }
                         }
                     }
                     HandGesture.THUMBS_UP -> {
                         if (gestureEngine.shouldCycleColor()) {
                             currentColorIndex = (currentColorIndex + 1) % BALL_COLORS.size
                             applyBallColor()
-                            if (soundEnabled) sound.playBubble()
+                            // bubble sound removed
                         }
                     }
                     HandGesture.SPREAD -> {
                         if (gestureEngine.shouldExplode()) {
                             deformController.applyExplode()
                             waveSystem.excite(0.5, 0.8, 0.3, 3.0)
-                            if (soundEnabled) sound.playExplode()
+                            // explode sound removed
                         }
                     }
                     HandGesture.HORNS -> {
                         if (gestureEngine.shouldScramble()) {
                             deformController.applyScramble()
-                            if (soundEnabled) sound.playScramble()
+                            // scramble sound removed
                         }
                     }
                     HandGesture.PUNCH -> {
                         if (gestureEngine.shouldPunch()) {
                             deformController.applyExplode()
                             waveSystem.excite(0.5, 0.8, 0.3, 3.0)
-                            if (soundEnabled) sound.playExplode()
+                            // explode sound removed
                         }
                     }
                     HandGesture.PINCH -> {
@@ -686,7 +689,7 @@ fun main() {
                             }
                             if (soundEnabled && squishSoundCooldown <= 0.0) {
                                 sound.playPinch(gestureEngine.pinchAmount)
-                                squishSoundCooldown = 0.08
+                                squishSoundCooldown = 1.0
                             }
                             gesturePokeCooldown = 0.05
                         }
@@ -708,18 +711,21 @@ fun main() {
                                 recentPokes.add(PokeEvent(pt.x, pt.y, pt.z, elapsed))
                                 if (recentPokes.size > 8) recentPokes.removeAt(0)
                             }
-                            if (soundEnabled) sound.playPull()
+                            if (soundEnabled && pullSoundCooldown <= 0.0) {
+                                sound.playPull()
+                                pullSoundCooldown = 1.0
+                            }
                         }
                     }
                     HandGesture.SLAP -> {
                         // Open-hand slap — broad impact with wobble
                         if (gestureEngine.shouldSlap()) {
                             deformController.applySlap(
-                                -gestureEngine.handDeltaX * 15.0,
-                                -gestureEngine.handDeltaY * 15.0
+                                -gestureEngine.handDeltaX * 20.0,
+                                -gestureEngine.handDeltaY * 20.0
                             )
-                            waveSystem.excite(-gestureEngine.handDeltaX, -gestureEngine.handDeltaY, -0.3, 1.5)
-                            if (soundEnabled) sound.playSlap()
+                            waveSystem.excite(-gestureEngine.handDeltaX * 2.0, -gestureEngine.handDeltaY * 2.0, -0.5, 3.0)
+                            // slap sound removed
                         }
                     }
                     HandGesture.SLICE -> {
@@ -736,7 +742,7 @@ fun main() {
                             val nz = 0.0
                             deformController.applySlice(nx, ny, nz)
                             waveSystem.excite(nx * 0.5, ny * 0.5, 0.0, 2.0)
-                            if (soundEnabled) sound.playSlice()
+                            // slice sound removed
                         }
                     }
                     HandGesture.KNEAD -> {
@@ -748,7 +754,7 @@ fun main() {
                         )
                         if (soundEnabled && squishSoundCooldown <= 0.0) {
                             sound.playKnead()
-                            squishSoundCooldown = 0.3
+                            squishSoundCooldown = 1.0
                         }
                     }
                     HandGesture.TWO_HAND_RESIZE -> {
@@ -758,12 +764,18 @@ fun main() {
                             deformController.applyResize(resizeDelta * 8.0, dt)
                             if (soundEnabled && squishSoundCooldown <= 0.0) {
                                 sound.playResize(resizeDelta > 0)
-                                squishSoundCooldown = 0.15
+                                squishSoundCooldown = 1.0
                             }
                         }
                     }
+                    HandGesture.MIDDLE_FINGER -> {}
                     HandGesture.NONE -> {}
                 }
+            }
+
+            // Middle finger works in any section
+            if (gestureEngine.currentGesture == HandGesture.MIDDLE_FINGER) {
+                overlay.showOkayPopup()
             }
         }
 
@@ -884,7 +896,6 @@ fun main() {
                     waveSystem.excite(-pt.x * 0.15, -pt.y * 0.15, -pt.z * 0.15, 0.6)
                     recentPokes.add(PokeEvent(pt.x, pt.y, pt.z, elapsed))
                     if (recentPokes.size > 8) recentPokes.removeAt(0)
-                    if (soundEnabled) sound.playPoke()
                 }
             }
         } else {

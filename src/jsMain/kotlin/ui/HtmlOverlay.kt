@@ -31,6 +31,10 @@ class HtmlOverlay(
     private var breathingCircle: HTMLElement? = null
     private var breathingLabel: HTMLElement? = null
     private var breathingBtn: HTMLElement? = null
+    private var gestureGuide: HTMLElement? = null
+    private var gestureGuideVisible = true
+    private var okayPopup: HTMLElement? = null
+    private var okayPopupTimer = 0.0
 
     private val quotes = arrayOf(
         "Take a breath. You're doing well.",
@@ -77,6 +81,7 @@ class HtmlOverlay(
                 <button class="pill-btn" id="btnColor">Color</button>
                 <button class="pill-btn" id="btnStyle">Calm Jelly</button>
                 <button class="pill-btn" id="btnBreath">Breathe</button>
+                <button class="pill-btn" id="btnGestureGuide">Gestures</button>
             </div>
         """.trimIndent())
         sectionChill?.style?.display = "none"
@@ -93,12 +98,13 @@ class HtmlOverlay(
         document.getElementById("btnStyle")?.addEventListener("click", { onCycleStyle() })
         breathingBtn = document.getElementById("btnBreath") as? HTMLElement
         breathingBtn?.addEventListener("click", { toggleBreathing() })
+        document.getElementById("btnGestureGuide")?.addEventListener("click", { toggleGestureGuide() })
 
         // -- Global gesture toggle (always visible, top-right) --
         val gestureBtn = (document.createElement("button") as HTMLElement).apply {
             id = "btnGesture"
             className = "pill-btn gesture-global-btn"
-            textContent = "Gesture ON"
+            textContent = "Turn On The Camera"
         }
         document.body?.appendChild(gestureBtn)
         gestureBtn.addEventListener("click", { onToggleGesture() })
@@ -118,6 +124,42 @@ class HtmlOverlay(
         document.body?.appendChild(breathOverlay)
         breathingCircle = document.getElementById("breathCircle") as? HTMLElement
         breathingLabel = document.getElementById("breathLabel") as? HTMLElement
+
+        // -- Gesture guide overlay (hidden by default) --
+        gestureGuide = (document.createElement("div") as HTMLDivElement).apply {
+            id = "gestureGuide"
+            className = "gesture-guide"
+            innerHTML = """
+                <div class="gesture-guide-title">Hand Gestures</div>
+                <div class="gesture-guide-grid">
+                    <div class="gesture-item"><span class="gesture-emoji">✋</span><span class="gesture-name">Open Palm</span><span class="gesture-desc">Push surface</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">✊</span><span class="gesture-name">Fist</span><span class="gesture-desc">Squeeze</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">☝️</span><span class="gesture-name">Pointer</span><span class="gesture-desc">Poke</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">✌️</span><span class="gesture-name">Victory</span><span class="gesture-desc">Stretch up</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">👌</span><span class="gesture-name">OK Sign</span><span class="gesture-desc">Reset shape</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">👍</span><span class="gesture-name">Thumbs Up</span><span class="gesture-desc">Cycle color</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">🖐️</span><span class="gesture-name">Jazz Hands</span><span class="gesture-desc">Explode</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">🤘</span><span class="gesture-name">Horns</span><span class="gesture-desc">Scramble</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">👊</span><span class="gesture-name">Punch</span><span class="gesture-desc">Impact</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">🤏</span><span class="gesture-name">Pinch</span><span class="gesture-desc">Dent inward</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">🤌</span><span class="gesture-name">Pull</span><span class="gesture-desc">Stretch out</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">✋💨</span><span class="gesture-name">Slap</span><span class="gesture-desc">Broad hit</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">🔪</span><span class="gesture-name">Slice</span><span class="gesture-desc">Split blob</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">🫳</span><span class="gesture-name">Knead</span><span class="gesture-desc">Dough squeeze</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">🙌</span><span class="gesture-name">Two Hands</span><span class="gesture-desc">Resize</span></div>
+                </div>
+            """.trimIndent()
+        }
+        document.body?.appendChild(gestureGuide!!)
+
+        // -- "IT WILL BE OKAY" popup (hidden by default) --
+        okayPopup = (document.createElement("div") as HTMLDivElement).apply {
+            id = "okayPopup"
+            className = "okay-popup"
+            textContent = "IT WILL BE OKAY"
+            style.display = "none"
+        }
+        document.body?.appendChild(okayPopup!!)
 
         // -- Section: Maths (3D graph — sidebar handles UI) --
         sectionMaths = createSection("section-maths", """
@@ -181,9 +223,12 @@ class HtmlOverlay(
         // Quote shows on chill mode
         quoteEl?.style?.display = if (name == "deform") "" else "none"
 
-        // Stop breathing when leaving chill
+        // Stop breathing and hide gesture guide when leaving chill
         if (name != "deform" && breathingActive) {
             stopBreathing()
+        }
+        if (name != "deform" && gestureGuideVisible) {
+            hideGestureGuide()
         }
 
         onSectionChanged(name)
@@ -221,7 +266,7 @@ class HtmlOverlay(
 
     fun updateGestureLabel(on: Boolean) {
         (document.getElementById("btnGesture") as? HTMLElement)?.textContent =
-            if (on) "Gesture ON" else "Gesture OFF"
+            if (on) "Turn Off The Camera" else "Turn On The Camera"
         // Auto-toggle camera preview with gesture
         if (on) {
             js("window._cameraPreviewOn = true")
@@ -288,4 +333,37 @@ class HtmlOverlay(
     }
 
     fun isBreathingActive(): Boolean = breathingActive
+
+    // -- "IT WILL BE OKAY" popup --
+    fun showOkayPopup() {
+        if (okayPopupTimer > 0.0) return // already showing
+        okayPopup?.style?.display = ""
+        okayPopup?.classList?.add("visible")
+        okayPopupTimer = 3.0
+    }
+
+    fun updateOkayPopup(dt: Double) {
+        if (okayPopupTimer > 0.0) {
+            okayPopupTimer -= dt
+            if (okayPopupTimer <= 0.0) {
+                okayPopup?.classList?.remove("visible")
+                okayPopup?.style?.display = "none"
+            }
+        }
+    }
+
+    // -- Gesture Guide --
+    private fun toggleGestureGuide() {
+        if (gestureGuideVisible) hideGestureGuide() else showGestureGuide()
+    }
+
+    private fun showGestureGuide() {
+        gestureGuide?.style?.display = ""
+        gestureGuideVisible = true
+    }
+
+    private fun hideGestureGuide() {
+        gestureGuide?.style?.display = "none"
+        gestureGuideVisible = false
+    }
 }

@@ -291,15 +291,15 @@ class DeformationController(private val spring: SpringPhysics) {
         }
     }
 
-    /** Slap — fast broad contact impact, like an open hand hitting the ball */
+    /** Slap — fast broad contact impact with proper bounce */
     fun applySlap(dirX: Double, dirY: Double) {
-        spring.maxOffset = 2.0
-        spring.maxVelocity = 12.0
+        spring.maxOffset = 3.5
+        spring.maxVelocity = 20.0
         val dLen = sqrt(dirX * dirX + dirY * dirY + 0.25)
         val ndx = dirX / dLen
         val ndy = dirY / dLen
         val ndz = -0.5 / dLen
-        val strength = 1.8
+        val impactStrength = 3.5
 
         for (i in 0 until vertexCount) {
             val ox = spring.getOriginalX(i)
@@ -308,29 +308,38 @@ class DeformationController(private val spring: SpringPhysics) {
             val origLen = sqrt(ox * ox + oy * oy + oz * oz)
             if (origLen < 0.001) continue
 
+            // How much this vertex faces the slap direction
             val dot = (ox * ndx + oy * ndy + oz * ndz) / origLen
 
             if (dot > 0.0) {
-                // Broader impact than punch — wider area, less deep
-                val push = strength * dot
+                // Impact side — dent inward hard
+                val push = impactStrength * dot * dot
+                // Push inward (toward center)
                 spring.targetOffsets[i * 3] = (spring.targetOffsets[i * 3] - (push * ox / origLen).toFloat())
                 spring.targetOffsets[i * 3 + 1] = (spring.targetOffsets[i * 3 + 1] - (push * oy / origLen).toFloat())
                 spring.targetOffsets[i * 3 + 2] = (spring.targetOffsets[i * 3 + 2] - (push * oz / origLen).toFloat())
-                // Broader velocity kick with more lateral spread
-                spring.velocities[i * 3] = (spring.velocities[i * 3] + (ndx * push * 2.0).toFloat())
-                spring.velocities[i * 3 + 1] = (spring.velocities[i * 3 + 1] + (ndy * push * 2.0).toFloat())
-                spring.velocities[i * 3 + 2] = (spring.velocities[i * 3 + 2] + (ndz * push * 2.0).toFloat())
-                // Add wobble perpendicular to impact
-                val wobble = (kotlin.random.Random.nextDouble() - 0.5) * push * 0.5
-                spring.velocities[i * 3] = (spring.velocities[i * 3] + (ndy * wobble).toFloat())
-                spring.velocities[i * 3 + 1] = (spring.velocities[i * 3 + 1] - (ndx * wobble).toFloat())
+                // Strong velocity in slap direction for bounce travel
+                val velKick = impactStrength * dot * 5.0
+                spring.velocities[i * 3] = (spring.velocities[i * 3] + (ndx * velKick).toFloat())
+                spring.velocities[i * 3 + 1] = (spring.velocities[i * 3 + 1] + (ndy * velKick).toFloat())
+                spring.velocities[i * 3 + 2] = (spring.velocities[i * 3 + 2] + (ndz * velKick).toFloat())
             } else {
-                // Back-facing: jiggle
-                val jiggle = strength * 0.3 * dot * dot
-                spring.targetOffsets[i * 3] = (spring.targetOffsets[i * 3] + (jiggle * ox / origLen).toFloat())
-                spring.targetOffsets[i * 3 + 1] = (spring.targetOffsets[i * 3 + 1] + (jiggle * oy / origLen).toFloat())
-                spring.targetOffsets[i * 3 + 2] = (spring.targetOffsets[i * 3 + 2] + (jiggle * oz / origLen).toFloat())
+                // Opposite side — bulge outward (ball squishes through)
+                val bulge = impactStrength * 0.6 * dot * dot
+                spring.targetOffsets[i * 3] = (spring.targetOffsets[i * 3] + (bulge * ox / origLen).toFloat())
+                spring.targetOffsets[i * 3 + 1] = (spring.targetOffsets[i * 3 + 1] + (bulge * oy / origLen).toFloat())
+                spring.targetOffsets[i * 3 + 2] = (spring.targetOffsets[i * 3 + 2] + (bulge * oz / origLen).toFloat())
+                // Outward velocity for bouncy rebound
+                val outVel = impactStrength * 0.4 * dot * dot * 4.0
+                spring.velocities[i * 3] = (spring.velocities[i * 3] + (ox / origLen * outVel).toFloat())
+                spring.velocities[i * 3 + 1] = (spring.velocities[i * 3 + 1] + (oy / origLen * outVel).toFloat())
+                spring.velocities[i * 3 + 2] = (spring.velocities[i * 3 + 2] + (oz / origLen * outVel).toFloat())
             }
+
+            // Wobble perpendicular to impact for jelly effect
+            val wobble = (kotlin.random.Random.nextDouble() - 0.5) * impactStrength * 0.8
+            spring.velocities[i * 3] = (spring.velocities[i * 3] + (ndy * wobble).toFloat())
+            spring.velocities[i * 3 + 1] = (spring.velocities[i * 3 + 1] - (ndx * wobble).toFloat())
         }
     }
 

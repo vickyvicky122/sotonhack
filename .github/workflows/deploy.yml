@@ -24,28 +24,36 @@ jobs:
       - name: Build production bundle
         run: ./gradlew jsBrowserProductionWebpack
 
-      - name: Deploy via SSH
+      - name: Deploy to VPS then relay to Unraid
         uses: appleboy/ssh-action@v1
+        env:
+          UNRAID_IP: "100.85.82.61"
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: mkdir -p /opt/squish-space/dist
+          envs: UNRAID_IP
+          script: |
+            mkdir -p /tmp/squish-deploy
 
-      - name: Copy files via SCP
+      - name: Copy built files to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "build/dist/js/productionExecutable/*"
-          target: "/opt/squish-space/dist"
+          target: "/tmp/squish-deploy"
           strip_components: 4
 
-      - name: Restart container
+      - name: Relay to Unraid and restart
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: cd /opt/homelab/stacks/squish-space && docker compose up -d --force-recreate
+          script: |
+            ssh -o StrictHostKeyChecking=no root@100.85.82.61 "mkdir -p /mnt/user/appdata/squish-space/dist"
+            scp -o StrictHostKeyChecking=no -r /tmp/squish-deploy/* root@100.85.82.61:/mnt/user/appdata/squish-space/dist/
+            ssh -o StrictHostKeyChecking=no root@100.85.82.61 "cd /mnt/user/appdata/komodo/stacks/squish-space && docker compose up -d --force-recreate 2>/dev/null || docker run -d --name squish-space --restart unless-stopped -p 8901:80 -v /mnt/user/appdata/squish-space/dist:/usr/share/nginx/html:ro nginx:alpine"
+            rm -rf /tmp/squish-deploy

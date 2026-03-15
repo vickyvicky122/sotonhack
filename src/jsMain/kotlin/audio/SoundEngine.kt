@@ -3,9 +3,6 @@ package audio
 class SoundEngine {
 
     private val ctx: dynamic = js("new (window.AudioContext || window.webkitAudioContext)()")
-    private var droneOsc: dynamic = null
-    private var droneGain: dynamic = null
-    private var isDroneActive = false
 
     // Pre-loaded audio sample buffers stored as a plain JS object on window
     private val sampleStore: dynamic = js("(window.__sampleBuffers = window.__sampleBuffers || {})")
@@ -164,40 +161,6 @@ class SoundEngine {
 
         noise.start(now)
         noise.stop(now + 0.5)
-    }
-
-    /** Low rumble drone tied to deformation — foam under stress */
-    fun updateDrone(energy: Double) {
-        ensureResumed()
-        if (!isDroneActive) {
-            startDrone()
-        }
-        val now = ctx.currentTime as Double
-        val freq = 50.0 + energy * 80.0
-        val vol = (energy * 0.07).coerceAtMost(0.07)
-        droneOsc.frequency.setTargetAtTime(freq, now, 0.15)
-        droneGain.gain.setTargetAtTime(vol, now, 0.08)
-    }
-
-    private fun startDrone() {
-        val now = ctx.currentTime as Double
-        droneOsc = ctx.createOscillator()
-        droneGain = ctx.createGain()
-
-        val filter = ctx.createBiquadFilter()
-        filter.type = "lowpass"
-        filter.frequency.setValueAtTime(200, now)
-
-        droneOsc.type = "sine"
-        droneOsc.frequency.setValueAtTime(50, now)
-        droneGain.gain.setValueAtTime(0.0, now)
-
-        droneOsc.connect(filter)
-        filter.connect(droneGain)
-        droneGain.connect(ctx.destination)
-
-        droneOsc.start(now)
-        isDroneActive = true
     }
 
     /** Soft squish sound for squeeze/stretch — wet slime sample + muffled foam compression */

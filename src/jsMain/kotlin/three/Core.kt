@@ -21,6 +21,8 @@ open external class Object3D {
     fun remove(obj: Object3D)
 }
 
+external class Group : Object3D
+
 external class Vector3(x: Double = definedExternally, y: Double = definedExternally, z: Double = definedExternally) {
     var x: Double
     var y: Double
@@ -80,6 +82,7 @@ external class Raycaster {
 open external class BufferGeometry {
     fun getAttribute(name: String): BufferAttribute
     fun setAttribute(name: String, attribute: BufferAttribute): BufferGeometry
+    fun setFromPoints(points: Array<Vector3>): BufferGeometry
     fun computeVertexNormals()
     fun dispose()
     val attributes: dynamic

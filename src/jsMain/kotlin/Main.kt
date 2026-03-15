@@ -813,13 +813,6 @@ fun main() {
                 if (result.plucked && soundEnabled) sound.playStrum()
             }
 
-            // String drone
-            if (soundEnabled) {
-                val energy = stringSystem.getTotalEnergy()
-                if (energy > 0.001) {
-                    sound.updateDrone(energy.coerceAtMost(2.0) / 2.0)
-                }
-            }
         }
 
         // Global shortcuts
@@ -915,7 +908,6 @@ fun main() {
             springPhysics.volumePreservation = (springPhysics.volumePreservation + dt * 0.3).coerceAtMost(0.7)
         }
 
-        if (soundEnabled) sound.updateDrone(springPhysics.totalEnergy.coerceAtMost(2.0) / 2.0)
 
         // ============================================
         // === Per-vertex shader-like coloring pass ===

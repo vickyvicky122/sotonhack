@@ -2,6 +2,7 @@ package gesture
 
 import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.sqrt
 
 enum class HandGesture(val label: String) {
@@ -56,16 +57,22 @@ class GestureEngine {
     var hand2Detected = false
         private set
 
-    // Normalized hand position (0-1, webcam coords)
+    // Normalized hand position (0-1, webcam coords) — EMA smoothed
     var handX = 0.5
         private set
     var handY = 0.5
         private set
 
-    // Index fingertip position for pointer mode
+    // Index fingertip position for pointer mode — EMA smoothed
     var fingerTipX = 0.5
         private set
     var fingerTipY = 0.5
+        private set
+
+    // Grip strength (0 = open hand, 1 = fully closed fist) — continuous
+    var gripAmount = 0.0
+        private set
+    var prevGripAmount = 0.0
         private set
 
     // Frame-to-frame hand movement delta
@@ -116,6 +123,18 @@ class GestureEngine {
     private var prevHandX = 0.5
     private var prevHandY = 0.5
 
+    // EMA smoothing for hand positions (filters MediaPipe jitter)
+    private val smoothAlpha = 0.35  // 0 = maximum smoothing, 1 = no smoothing
+    private var smoothHandX = 0.5
+    private var smoothHandY = 0.5
+    private var smoothFingerTipX = 0.5
+    private var smoothFingerTipY = 0.5
+    private var smoothPalmCenterX = 0.5
+    private var smoothPalmCenterY = 0.5
+    // Smoothed fingertip positions (5 fingertips x 2 coords)
+    private val smoothFingerX = DoubleArray(5) { 0.5 }
+    private val smoothFingerY = DoubleArray(5) { 0.5 }
+
     // Swipe tracking for slice detection
     private var swipeStartX = 0.5
     private var swipeAccumX = 0.0
@@ -125,7 +144,7 @@ class GestureEngine {
     // Gesture smoothing
     private var rawGesture = HandGesture.NONE
     private var gestureFrames = 0
-    private val confirmFrames = 2  // faster response to gesture changes
+    private val confirmFrames = 4  // filters single-frame gesture flickering (~67ms at 60fps)
 
     // One-shot action debounce
     private var resetCooldown = 0.0
@@ -216,20 +235,65 @@ class GestureEngine {
         val lm2: dynamic = if (lm2Valid) lm2Raw else null
 
         // Update hand position (wrist = landmark 0)
+        // Use raw values for delta computation, then EMA-smooth the exposed positions
+        val rawHandX = lm[0].x as Double
+        val rawHandY = lm[0].y as Double
         prevHandX = handX
         prevHandY = handY
-        handX = lm[0].x as Double
-        handY = lm[0].y as Double
+        smoothHandX = smoothAlpha * rawHandX + (1.0 - smoothAlpha) * smoothHandX
+        smoothHandY = smoothAlpha * rawHandY + (1.0 - smoothAlpha) * smoothHandY
+        handX = smoothHandX
+        handY = smoothHandY
         handDeltaX = handX - prevHandX
         handDeltaY = handY - prevHandY
 
-        // Index fingertip (landmark 8) for pointer mode
-        fingerTipX = lm[8].x as Double
-        fingerTipY = lm[8].y as Double
+        // Index fingertip (landmark 8) for pointer mode — EMA smoothed
+        val rawFingerTipX = lm[8].x as Double
+        val rawFingerTipY = lm[8].y as Double
+        smoothFingerTipX = smoothAlpha * rawFingerTipX + (1.0 - smoothAlpha) * smoothFingerTipX
+        smoothFingerTipY = smoothAlpha * rawFingerTipY + (1.0 - smoothAlpha) * smoothFingerTipY
+        fingerTipX = smoothFingerTipX
+        fingerTipY = smoothFingerTipY
 
         // Build 3D hand state
         hand3D = build3DState(lm)
         hand2_3D = if (lm2 != null) build3DState(lm2) else null
+
+        // EMA-smooth 3D palm center for contact deformation
+        val h3d = hand3D
+        if (h3d != null) {
+            smoothPalmCenterX = smoothAlpha * h3d.palmCenterX + (1.0 - smoothAlpha) * smoothPalmCenterX
+            smoothPalmCenterY = smoothAlpha * h3d.palmCenterY + (1.0 - smoothAlpha) * smoothPalmCenterY
+            // Smooth each fingertip position
+            for (fi in h3d.fingers.indices) {
+                smoothFingerX[fi] = smoothAlpha * h3d.fingers[fi].x + (1.0 - smoothAlpha) * smoothFingerX[fi]
+                smoothFingerY[fi] = smoothAlpha * h3d.fingers[fi].y + (1.0 - smoothAlpha) * smoothFingerY[fi]
+            }
+        }
+
+        // Compute grip amount: how closed is the fist (0=open, 1=fully closed)
+        // Measured by average fingertip curl — ratio of tip-to-wrist vs MCP-to-wrist distance
+        prevGripAmount = gripAmount
+        val wristX = lm[0].x as Double
+        val wristY = lm[0].y as Double
+        val tipIndices = intArrayOf(8, 12, 16, 20)  // index, middle, ring, pinky tips
+        val mcpIndices = intArrayOf(5, 9, 13, 17)   // corresponding MCPs
+        var curlSum = 0.0
+        for (fi in tipIndices.indices) {
+            val tipX = lm[tipIndices[fi]].x as Double
+            val tipY = lm[tipIndices[fi]].y as Double
+            val mcpX = lm[mcpIndices[fi]].x as Double
+            val mcpY = lm[mcpIndices[fi]].y as Double
+            val tipDist = hypot(tipX - wristX, tipY - wristY)
+            val mcpDist = hypot(mcpX - wristX, mcpY - wristY)
+            // When finger is extended: tipDist > mcpDist (ratio > 1)
+            // When curled: tipDist < mcpDist (ratio < 1)
+            val curlRatio = if (mcpDist > 0.001) (1.0 - tipDist / mcpDist).coerceIn(0.0, 1.0) else 0.0
+            curlSum += curlRatio
+        }
+        val rawGrip = (curlSum / tipIndices.size).coerceIn(0.0, 1.0)
+        // Smooth grip amount
+        gripAmount = smoothAlpha * rawGrip + (1.0 - smoothAlpha) * gripAmount
 
         // Track depth changes
         val currentDepth = hand3D?.estimatedDepth ?: 0.0
@@ -478,17 +542,20 @@ class GestureEngine {
         return Pair(ndcX, ndcY)
     }
 
-    /** Convert palm center to NDC for contact-based deformation */
+    /** Convert palm center to NDC for contact-based deformation (EMA smoothed) */
     fun getPalmNDC(): Pair<Double, Double> {
-        val h = hand3D ?: return Pair(0.0, 0.0)
-        val ndcX = 1.0 - 2.0 * h.palmCenterX
-        val ndcY = 1.0 - 2.0 * h.palmCenterY
+        if (hand3D == null) return Pair(0.0, 0.0)
+        val ndcX = 1.0 - 2.0 * smoothPalmCenterX
+        val ndcY = 1.0 - 2.0 * smoothPalmCenterY
         return Pair(ndcX, ndcY)
     }
 
-    /** Get all fingertip NDC positions for multi-point collision */
+    /** Get all fingertip NDC positions for multi-point collision (EMA smoothed) */
     fun getAllFingerNDC(): List<Pair<Double, Double>> {
-        return hand3D?.fingers?.map { Pair(it.ndcX, it.ndcY) } ?: emptyList()
+        if (hand3D == null) return emptyList()
+        return (0 until 5).map {
+            Pair(1.0 - 2.0 * smoothFingerX[it], 1.0 - 2.0 * smoothFingerY[it])
+        }
     }
 
     /** Convert hand movement to rotation values (mirrored for natural feel) */

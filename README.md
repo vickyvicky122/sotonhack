@@ -14,7 +14,15 @@ Two modes, one app:
 
 **Maths** — A 3D equation grapher. Plot surfaces like `z = ax² + by²`, rotate them in 3D, and tweak the coefficients with your hands via webcam. Add multiple equations, see them intersect, type exact values or just pinch and drag. Think Desmos, but you can reach in.
 
-**Chill** — A squishy blob. Push it, pull it, punch it, slice it in half with a karate chop. It deforms with real spring physics and volume preservation. When your brain needs a break from the maths.
+| Layer | Technology |
+|-------|-----------|
+| Language | **Kotlin/JS** (IR backend) via Kotlin Multiplatform |
+| 3D Engine | **Three.js r160** with custom `@JsModule` external declarations |
+| Physics | Per-vertex damped spring simulation (Hooke's law) |
+| Gesture Recognition | **MediaPipe Hands** (CDN) with heuristic classifier for 16 gestures |
+| Audio | **Web Audio API** — procedural ASMR synthesis (oscillators + filtered noise + envelopes) |
+| Build | **Gradle 8.5** + Kotlin/JS webpack bundling |
+| Styling | Glassmorphism CSS with backdrop filters, 3 themes, 3 scale modes |
 
 Hand tracking is via MediaPipe — no gloves, no controllers, just your webcam and your fingers.
 
@@ -46,6 +54,42 @@ Equation types: Paraboloid, Saddle, Wave, Ripple, Gaussian, Plane.
 | W/S/A/D/Q/E/F | Stretch, squeeze, twist |
 | Space | Pulse |
 | R | Reset shape |
+| C | Cycle color (9 palettes) |
+| M | Toggle sound |
+| T | Cycle theme |
+
+### Mouse & Touch
+- **Click / Tap** — Poke the blob inward
+- **Drag** — Rotate the blob
+- **Scroll** — Zoom in/out
+
+### Hand Gestures (webcam)
+| Gesture | Effect |
+|---------|--------|
+| Open Palm | Finger + palm contact pushes the surface |
+| Fist (Grip) | Continuous squeeze inward (proportional to grip tightness) |
+| Pointer | Poke at fingertip |
+| Victory | Stretch vertically |
+| OK Sign | Reset shape |
+| Thumbs Up | Cycle color |
+| Spread (jazz hands) | Explode apart |
+| Horns (rock sign) | Scramble randomly |
+| Fast fist (punch) | Explosive impact |
+| Pinch (thumb + index) | Localized clay-like depression |
+| Pull (pinch + move away) | Stretch outward like taffy |
+| Slap (open palm + fast) | Broad directional impact with wobble |
+| Slice (fast horizontal swipe) | Splits the blob along a cutting plane |
+| Knead (ring + pinky extended) | Oscillating dough-like squeeze |
+| Two-Hand Resize | Spread apart to grow, together to shrink |
+
+## Material Presets
+
+- **Calm Jelly** — Translucent, glossy, soft clearcoat
+- **Soft Silicone** — Matte satin with procedural bump texture
+- **Pearl Dream** — Iridescent color-shifting surface
+- **Cloud Foam** — Fluffy, pillowy, diffuse glow
+
+## Project Structure
 | C | Cycle color |
 | Hands near blob | Fingers push into the surface |
 | Fast swipe | Slice the blob in two |

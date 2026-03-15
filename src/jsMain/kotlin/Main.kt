@@ -614,7 +614,9 @@ fun main() {
                     // These just add sound variation
                     HandGesture.OPEN -> {}
                     HandGesture.CLOSE -> {
-                        if (soundEnabled && squishSoundCooldown <= 0.0) {
+                        // Continuous grip squeeze — proportional to how closed the fist is
+                        deformController.applyGrip(gestureEngine.gripAmount, dt)
+                        if (soundEnabled && squishSoundCooldown <= 0.0 && gestureEngine.gripAmount > 0.2) {
                             sound.playSqueeze()
                             squishSoundCooldown = 0.12
                         }

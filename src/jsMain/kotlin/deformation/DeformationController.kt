@@ -83,6 +83,23 @@ class DeformationController(private val spring: SpringPhysics) {
 
     fun isDeforming(): Boolean = activeKeys > 0
 
+    /** Grip squeeze — continuous inward compression proportional to grip strength (0-1) */
+    fun applyGrip(gripAmount: Double, dt: Double) {
+        if (gripAmount < 0.05) return  // dead zone to avoid micro-jitter
+        val strength = squeezeRate * gripAmount * 1.2
+        for (i in 0 until vertexCount) {
+            val ox = spring.getOriginalX(i)
+            val oy = spring.getOriginalY(i)
+            val oz = spring.getOriginalZ(i)
+            val origLen = sqrt(ox * ox + oy * oy + oz * oz)
+            if (origLen > 0.001) {
+                spring.targetOffsets[i * 3] = (spring.targetOffsets[i * 3] - (strength * ox / origLen * dt).toFloat())
+                spring.targetOffsets[i * 3 + 1] = (spring.targetOffsets[i * 3 + 1] - (strength * oy / origLen * dt).toFloat())
+                spring.targetOffsets[i * 3 + 2] = (spring.targetOffsets[i * 3 + 2] - (strength * oz / origLen * dt).toFloat())
+            }
+        }
+    }
+
     fun applyPulse() {
         for (i in 0 until vertexCount) {
             val ox = spring.getOriginalX(i)

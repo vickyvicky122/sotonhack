@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  Squishy Blob -- Setup and Run
+#  squish.space -- Setup and Run
 #  Works on macOS and Debian/Ubuntu Linux.
 #  Checks for a compatible JDK (11-21) and Node.js, installs
 #  them automatically if missing, then starts the dev server.
@@ -20,7 +20,7 @@ err()     { echo -e "${RED}[ERROR]${RESET} $*" >&2; }
 die()     { err "$*"; exit 1; }
 
 echo -e "${BOLD}============================================${RESET}"
-echo -e "${BOLD}  Squishy Blob -- Setup and Run${RESET}"
+echo -e "${BOLD}  squish.space -- Setup and Run${RESET}"
 echo -e "${BOLD}============================================${RESET}"
 echo ""
 

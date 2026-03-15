@@ -1,1 +1,1 @@
-rootProject.name = "squishy-blob"
+rootProject.name = "squish-space"

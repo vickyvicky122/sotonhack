@@ -792,6 +792,10 @@ fun main() {
                 mathGraph.resetSelected()
                 inputHandler.pressedKeys.remove("r"); inputHandler.pressedKeys.remove("R")
             }
+            if ("l" in inputHandler.pressedKeys || "L" in inputHandler.pressedKeys) {
+                mathGraph.toggleLock()
+                inputHandler.pressedKeys.remove("l"); inputHandler.pressedKeys.remove("L")
+            }
 
             // Arrow keys: up/down → c, left/right → translate graph
             // (only when no input field is focused)

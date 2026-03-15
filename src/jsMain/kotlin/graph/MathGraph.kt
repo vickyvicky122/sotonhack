@@ -73,6 +73,8 @@ class MathGraph(private val scene: Scene) {
 
     var isGrabbing = false
         private set
+    var locked = false
+        private set
 
     private var panelEl: HTMLElement? = null
     private var eqDisplayEl: HTMLElement? = null
@@ -220,7 +222,13 @@ class MathGraph(private val scene: Scene) {
         (document.getElementById("eqFormula") as? HTMLElement)?.textContent = selectedEquation?.displayString() ?: ""
     }
 
+    fun toggleLock() {
+        locked = !locked
+        rebuildPanel()
+    }
+
     fun adjustAB(deltaX: Double, deltaY: Double) {
+        if (locked) return
         isGrabbing = true
         val eq = selectedEquation ?: return
         eq.a = (eq.a + deltaX * 5.0).coerceIn(-5.0, 5.0)
@@ -228,6 +236,7 @@ class MathGraph(private val scene: Scene) {
     }
 
     fun adjustC(deltaY: Double) {
+        if (locked) return
         isGrabbing = true
         val eq = selectedEquation ?: return
         eq.c = (eq.c + deltaY * 4.0).coerceIn(-10.0, 10.0)
@@ -351,30 +360,32 @@ class MathGraph(private val scene: Scene) {
             """.trimIndent())
         }
 
+        val lockLabel = if (locked) "unlock" else "lock"
+        val lockIcon = if (locked) "🔒" else "🔓"
         sb.append("""
             <div class='gp-actions'>
                 <button class='gp-btn' id='gpAdd'>+ add</button>
                 <button class='gp-btn' id='gpCycle'>type ▸</button>
                 <button class='gp-btn' id='gpReset'>reset</button>
             </div>
-            <div class='gp-hint'>pinch + drag → a, b<br>↑↓ keys → c · ←→ keys → pan</div>
+            <div class='gp-actions' style='margin-top:4px'>
+                <button class='gp-btn gp-lock${if (locked) " gp-locked" else ""}' id='gpLock'>$lockIcon $lockLabel</button>
+            </div>
+            <div class='gp-hint'>${if (locked) "editing locked — gestures won't change coefficients" else "pinch + drag → a, b · ↑↓ → c · ←→ → pan"}</div>
         """.trimIndent())
 
         panel.innerHTML = sb.toString()
 
         // Wire events via window callbacks (avoids Kotlin name mangling issues)
-        js("window._graphSelectSurface = null")
-        js("window._graphRemoveSurface = null")
-        js("window._graphAddSurface = null")
-        js("window._graphCycleType = null")
-        js("window._graphReset = null")
         val mg = this
+        val numTemplates = EQUATION_TEMPLATES.size
+        val numSurfaces = surfaces.size
         js("window._graphSelectSurface = function(i) { mg.selectSurface(i); }")
         js("window._graphRemoveSurface = function(i) { mg.removeSurface(i); }")
-        val nextTpl = surfaces.size % EQUATION_TEMPLATES.size
-        js("window._graphAddSurface = function() { mg.addSurface(nextTpl); }")
+        js("window._graphAddSurface = function() { mg.addSurface(numSurfaces % numTemplates); }")
         js("window._graphCycleType = function() { mg.cycleSelectedType(); }")
         js("window._graphReset = function() { mg.resetSelected(); }")
+        js("window._graphToggleLock = function() { mg.toggleLock(); }")
 
         // Now wire using onclick attributes in JS
         js("""
@@ -406,7 +417,8 @@ class MathGraph(private val scene: Scene) {
             if (cycBtn) cycBtn.onclick = function() { window._graphCycleType(); };
             var resBtn = document.getElementById('gpReset');
             if (resBtn) resBtn.onclick = function() { window._graphReset(); };
-            // Coefficient inputs are polled from Kotlin each frame (syncInputs)
+            var lockBtn = document.getElementById('gpLock');
+            if (lockBtn) lockBtn.onclick = function() { window._graphToggleLock(); };
         })()
         """)
     }

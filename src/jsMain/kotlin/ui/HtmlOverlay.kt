@@ -71,17 +71,12 @@ class HtmlOverlay(
 
         // -- Section: Chill (blob + breathing) --
         sectionChill = createSection("section-chill", """
-            <div class="section-hint">
-                drag to rotate · scroll to zoom · squish with your hands
-            </div>
+            <div class="section-hint">squish with your hands · drag to rotate · scroll to zoom</div>
             <div class="deform-controls">
                 <button class="pill-btn" id="btnReset">Reset</button>
-                <button class="pill-btn" id="btnSound">Sound ON</button>
-                <button class="pill-btn" id="btnTheme">Theme</button>
                 <button class="pill-btn" id="btnColor">Color</button>
                 <button class="pill-btn" id="btnStyle">Calm Jelly</button>
                 <button class="pill-btn" id="btnBreath">Breathe</button>
-                <button class="pill-btn" id="btnGestureGuide">Gestures</button>
             </div>
         """.trimIndent())
         sectionChill?.style?.display = "none"
@@ -89,16 +84,12 @@ class HtmlOverlay(
 
         // Wire chill buttons
         document.getElementById("btnReset")?.addEventListener("click", { onReset() })
-        soundBtn = document.getElementById("btnSound") as? HTMLElement
-        soundBtn?.addEventListener("click", { onToggleSound() })
-        document.getElementById("btnTheme")?.addEventListener("click", { onCycleTheme() })
         document.getElementById("btnColor")?.addEventListener("click", {
             document.dispatchEvent(js("new KeyboardEvent('keydown', {key: 'c'})"))
         })
         document.getElementById("btnStyle")?.addEventListener("click", { onCycleStyle() })
         breathingBtn = document.getElementById("btnBreath") as? HTMLElement
         breathingBtn?.addEventListener("click", { toggleBreathing() })
-        document.getElementById("btnGestureGuide")?.addEventListener("click", { toggleGestureGuide() })
 
         // -- Global gesture toggle (always visible, top-right) --
         val gestureBtn = (document.createElement("button") as HTMLElement).apply {
@@ -132,22 +123,14 @@ class HtmlOverlay(
             innerHTML = """
                 <div class="gesture-guide-title">Hand Gestures</div>
                 <div class="gesture-guide-grid">
-                    <div class="gesture-item"><span class="gesture-emoji">✋</span><span class="gesture-name">Open Palm</span><span class="gesture-desc">Push surface</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">✊</span><span class="gesture-name">Fist</span><span class="gesture-desc">Squeeze</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">☝️</span><span class="gesture-name">Pointer</span><span class="gesture-desc">Poke</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">✌️</span><span class="gesture-name">Victory</span><span class="gesture-desc">Stretch up</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">👌</span><span class="gesture-name">OK Sign</span><span class="gesture-desc">Reset shape</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">👍</span><span class="gesture-name">Thumbs Up</span><span class="gesture-desc">Cycle color</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">🖐️</span><span class="gesture-name">Jazz Hands</span><span class="gesture-desc">Explode</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">🤘</span><span class="gesture-name">Horns</span><span class="gesture-desc">Scramble</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">👊</span><span class="gesture-name">Punch</span><span class="gesture-desc">Impact</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">🤏</span><span class="gesture-name">Pinch</span><span class="gesture-desc">Dent inward</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">🤌</span><span class="gesture-name">Pull</span><span class="gesture-desc">Stretch out</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">✋💨</span><span class="gesture-name">Slap</span><span class="gesture-desc">Broad hit</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">🔪</span><span class="gesture-name">Slice</span><span class="gesture-desc">Split blob</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">🫳</span><span class="gesture-name">Knead</span><span class="gesture-desc">Dough squeeze</span></div>
-                    <div class="gesture-item"><span class="gesture-emoji">🙌</span><span class="gesture-name">Two Hands</span><span class="gesture-desc">Resize</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">✋</span><span class="gesture-name">Open Hand</span><span class="gesture-desc">Fingers push into blob</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">✊</span><span class="gesture-name">Fist</span><span class="gesture-desc">Squeeze inward</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">☝️</span><span class="gesture-name">Point</span><span class="gesture-desc">Poke with fingertip</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">🤏</span><span class="gesture-name">Pinch</span><span class="gesture-desc">Dent like clay</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">👊</span><span class="gesture-name">Fast Fist</span><span class="gesture-desc">Explode!</span></div>
+                    <div class="gesture-item"><span class="gesture-emoji">🔪</span><span class="gesture-name">Fast Swipe</span><span class="gesture-desc">Slice in half</span></div>
                 </div>
+                <div class="gesture-guide-note">Just move your hand near the blob. Your fingers automatically push into the surface.</div>
             """.trimIndent()
         }
         document.body?.appendChild(gestureGuide!!)
@@ -164,7 +147,7 @@ class HtmlOverlay(
         // -- Section: Maths (3D graph — sidebar handles UI) --
         sectionMaths = createSection("section-maths", """
             <div class="strings-content">
-                <div class="strings-subtext">drag to rotate · scroll to shift · pinch to tweak</div>
+                <div class="strings-subtext">drag to rotate · scroll to zoom · E cycle · R reset · L lock · ↑↓ offset · ←→ pan</div>
             </div>
         """.trimIndent())
         document.body?.appendChild(sectionMaths!!)
@@ -223,12 +206,9 @@ class HtmlOverlay(
         // Quote shows on chill mode
         quoteEl?.style?.display = if (name == "deform") "" else "none"
 
-        // Stop breathing and hide gesture guide when leaving chill
+        // Stop breathing when leaving chill (gesture guide stays visible across tabs)
         if (name != "deform" && breathingActive) {
             stopBreathing()
-        }
-        if (name != "deform" && gestureGuideVisible) {
-            hideGestureGuide()
         }
 
         onSectionChanged(name)
